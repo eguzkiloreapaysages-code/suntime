@@ -118,6 +118,15 @@ figcaption{font-size:11.5px;color:var(--mute);text-align:center;margin-top:2px}
 .pix{image-rendering:pixelated}
 .hint{font-size:12px;color:var(--mute);margin-top:4px}
 .empty{color:var(--mute);font-style:italic}
+#busy{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:6000;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.28);padding:12px 16px;width:min(420px,92vw);display:none}
+#busy.show{display:block}
+#busy .bt{display:flex;align-items:center;gap:10px;font-weight:600}
+#busy .sp{width:20px;height:20px;border-radius:50%;border:3px solid #d9e4da;border-top-color:var(--acc);animation:spin .8s linear infinite;flex:0 0 auto}
+#busy.done .sp{animation:none;border-color:var(--acc);background:var(--acc)}
+#busy .bs{font-size:12.5px;color:var(--mute);margin:4px 0 8px 30px}
+#busy .bb{height:8px;background:#e8ece6;border-radius:4px;overflow:hidden}
+#busy .bb i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3f6b4a,#c7792b);transition:width .25s}
+@keyframes spin{to{transform:rotate(360deg)}}
 .drawing .leaflet-obst-pane path{pointer-events:none!important}
 .leaflet-planov-pane,.leaflet-adj-pane{mix-blend-mode:multiply}
 #finePanel{position:absolute;z-index:1002;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(255,255,255,.96);border-radius:10px;padding:8px 10px;box-shadow:0 2px 12px #0006;display:none;font-size:13px;width:max-content;max-width:96%}
@@ -220,6 +229,7 @@ html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
 </main>
 </div>
 
+<div id="busy"><div class="bt"><span class="sp"></span><span id="busyT">Analyse en cours…</span><span id="busyP" style="margin-left:auto;font-variant-numeric:tabular-nums">0 %</span></div><div class="bs" id="busyS"></div><div class="bb"><i id="busyB"></i></div></div>
 <div id="calib">
   <div class="ctop"><span id="calStep">—</span>
     <select id="calBase" title="Fond de référence"><option value="ortho">Fond : photo aérienne</option><option value="orthocad">Fond : photo + cadastre</option><option value="cad">Fond : cadastre</option><option value="plan">Fond : plan IGN</option><option value="osm">Fond : plan OSM</option></select>
@@ -268,6 +278,13 @@ function setOrigin(lat,lon){S.lat0=lat;S.lon0=lon;S.mx=111320*Math.cos(lat*RAD);
 function toXY(lat,lon){return [(lon-S.lon0)*S.mx,(lat-S.lat0)*S.my];}
 function toLL(x,y){return [S.lat0+y/S.my,S.lon0+x/S.mx];}
 const $=id=>document.getElementById(id);
+let busyTimer=null;
+function busy(title,sub,frac){const b=$("busy");clearTimeout(busyTimer);b.classList.add("show");b.classList.remove("done");
+  if(title)$("busyT").textContent=title;if(sub!=null)$("busyS").textContent=sub;
+  if(frac!=null){const p=Math.max(0,Math.min(100,Math.round(frac*100)));$("busyB").style.width=p+"%";$("busyP").textContent=p+" %";const r=$("btnRun");if(r.disabled)r.textContent=`Analyse en cours… ${p} %`;}}
+function busyEnd(ok,msg){const b=$("busy");if(ok){b.classList.add("done");$("busyT").textContent=msg||"Terminé";$("busyS").textContent="";$("busyB").style.width="100%";$("busyP").textContent="✓";busyTimer=setTimeout(()=>b.classList.remove("show"),2500);}
+  else{b.classList.remove("show");}}
+const tick=()=>new Promise(r=>setTimeout(r,0));
 function log(t){$("log").textContent+=t+"\n";$("log").scrollTop=1e9;}
 
 /* ================= Carte ================= */
@@ -411,11 +428,11 @@ async function loadData(){
   if(S.fetchedKey===key)return;
   const M=half()+150;const [s,w]=toLL(-M,-M),[n,e]=toLL(M,M);const bb={s,w,n,e};
   S.sources=[];let raw=[];
-  log("Bâtiments : interrogation IGN BD TOPO…");
+  log("Bâtiments : interrogation IGN BD TOPO…");busy("Chargement des données du site","Bâtiments et hauteurs (IGN)…",0.03);
   try{raw=await fetchIGN(bb);S.sources.push("Bâtiments et hauteurs : IGN BD TOPO® (Géoplateforme)");log(`  ${raw.length} bâtiments IGN.`);}
   catch(err){log("  IGN indisponible ("+err.message+"), repli sur OpenStreetMap.");raw=null;}
   let els=[];
-  try{log("Végétation"+(raw?"":" et bâtiments")+" : OpenStreetMap…");els=await fetchOSM(bb,!raw);}
+  try{log("Végétation"+(raw?"":" et bâtiments")+" : OpenStreetMap…");busy(null,"Arbres, haies et bois (OpenStreetMap) – peut prendre jusqu'à une minute…",0.10);els=await fetchOSM(bb,!raw);}
   catch(err){log("  "+err.message);}
   S.buildings=[];S.veg=[];S.trees=[];
   if(raw)raw.forEach(b=>S.buildings.push({id:b.id,ring:ccw(ringXY(b.ll)),h:b.h,src:b.src}));
@@ -442,7 +459,7 @@ async function loadData(){
   if(els.length)S.sources.push("Végétation : OpenStreetMap (arbres isolés, alignements, haies, bois)");
   S.buildings.forEach(b=>{if(S.hEdits[b.id]){b.h=S.hEdits[b.id];b.src="saisie";}});
   log(`  ${S.buildings.length} bâtiments, ${S.trees.length} arbres/haies, ${S.veg.length} massifs boisés.`);
-  if($("useTerrain").checked){try{log("Relief : profil d'horizon (Open-Meteo / Copernicus DEM)…");S.horizon=await fetchHorizon();
+  if($("useTerrain").checked){try{log("Relief : profil d'horizon (Open-Meteo / Copernicus DEM)…");busy(null,"Relief et masque d'horizon…",0.20);S.horizon=await fetchHorizon();
       S.sources.push("Relief : modèle numérique de terrain Copernicus 90 m via Open-Meteo");log(`  altitude ${Math.round(S.z0)} m, horizon max ${Math.max(...S.horizon).toFixed(1)}°.`);}
     catch(e){S.horizon=null;log("  relief indisponible, horizon plat.");}}
   S.fetchedKey=key;drawObstacles();
@@ -482,14 +499,14 @@ function drawShadow(ctx,N,H,sun,trees,color){
 function footprintMask(N,H){const ctx=makeCtx(N);setT(ctx,N,H);ctx.fillStyle="#000";ctx.beginPath();for(const b of S.buildings)pathPrism(ctx,b.ring,0,0,0);ctx.fill("nonzero");
   const d=ctx.getImageData(0,0,N,N).data,m=new Uint8Array(N*N);for(let i=0;i<N*N;i++)m[i]=d[4*i+3]>127?1:0;return m;}
 
-function simulateDay(iso,N,H,DT,keepTimeline){
+async function simulateDay(iso,N,H,DT,keepTimeline,onProg){
   const t0=dayStart(iso),steps=Math.round(1440/DT),trees=allTrees(),ctx=makeCtx(N),NN=N*N;
   const sun=new Float32Array(NN),am=new Float32Array(NN),pm=new Float32Array(NN);
   const tl=keepTimeline?new Uint8Array(NN*steps):null,times=[],pos=[];
   let noon=t0,maxA=-90;
   for(let i=0;i<steps;i++){const t=t0+(i+0.5)*DT*6e4,p=sunPos(t,S.lat0,S.lon0);times.push(t);pos.push(p);if(p.alt>maxA){maxA=p.alt;noon=t;}}
   let pot=0;
-  for(let i=0;i<steps;i++){const p=pos[i];if(p.alt<=0.5||p.alt<=horizonAt(p.az))continue;
+  for(let i=0;i<steps;i++){if(onProg&&i%6===0){onProg(i/steps);await tick();}const p=pos[i];if(p.alt<=0.5||p.alt<=horizonAt(p.az))continue;
     pot+=DT;drawShadow(ctx,N,H,p,trees,"#000");const d=ctx.getImageData(0,0,N,N).data,isAM=times[i]<noon;
     for(let c=0;c<NN;c++){const lit=d[4*c+3]<128;if(lit){sun[c]+=DT;if(isAM)am[c]+=DT;else pm[c]+=DT;}if(tl)tl[i*NN+c]=lit?2:1;}}
   return {sun,am,pm,pot,tl,times,pos,steps,noon,t0};
@@ -503,7 +520,8 @@ $("mode").onchange=()=>{const p=$("mode").value==="period";$("dayBox").style.dis
   $("date").value=`${y}-06-21`;$("d1").value=`${y}-06-15`;$("d2").value=`${y}-08-15`;})();
 
 $("btnRun").onclick=async()=>{
-  $("btnRun").disabled=true;$("log").textContent="";
+  $("btnRun").disabled=true;$("log").textContent="";busy("Analyse en cours…","Préparation…",0.01);
+  let ok=false;
   try{
     await loadData();
     const N=+$("res").value,H=half(),DT=+$("dt").value;
@@ -511,16 +529,21 @@ $("btnRun").onclick=async()=>{
     if($("mode").value==="day"){days=[$("date").value];ref=days[0];}
     else{let a=$("d1").value,b=$("d2").value;if(a>b)[a,b]=[b,a];days=[];for(let d=a;d<=b;d=isoAdd(d,5))days.push(d);if(days[days.length-1]!==b)days.push(b);ref=days[Math.floor(days.length/2)];}
     log(`Calcul des ombres (${days.length} jour${days.length>1?"s":""}, grille ${N}×${N}, cellule ${(2*H/N).toFixed(2)} m)…`);
-    await new Promise(r=>setTimeout(r,30));
+    busy("Calcul des ombres",days.length>1?`${days.length} jours à simuler`:`Journée du ${frDate(ref)}`,0.25);await tick();
     const NN=N*N,sun=new Float32Array(NN),am=new Float32Array(NN),pm=new Float32Array(NN);let pot=0,refRes=null;
-    for(const d of days){const r=simulateDay(d,N,H,DT,d===ref);for(let c=0;c<NN;c++){sun[c]+=r.sun[c]/days.length;am[c]+=r.am[c]/days.length;pm[c]+=r.pm[c]/days.length;}pot+=r.pot/days.length;if(d===ref)refRes=r;await new Promise(r=>setTimeout(r,0));}
+    for(let di=0;di<days.length;di++){const d=days[di];
+      const r=await simulateDay(d,N,H,DT,d===ref,f=>busy(null,days.length>1?`Jour ${di+1} / ${days.length} (${frDate(d)})`:null,0.25+0.67*(di+f)/days.length));for(let c=0;c<NN;c++){sun[c]+=r.sun[c]/days.length;am[c]+=r.am[c]/days.length;pm[c]+=r.pm[c]/days.length;}pot+=r.pot/days.length;if(d===ref)refRes=r;await new Promise(r=>setTimeout(r,0));}
     const bmask=footprintMask(N,H),parcelXY=S.parcel?ccw(S.parcel.map(p=>toXY(p[0],p[1]))):null;
     let pmask=null;if(parcelXY){const cx=makeCtx(N);setT(cx,N,H);cx.fillStyle="#000";cx.beginPath();pathPrism(cx,parcelXY,0,0,0);cx.fill();
       const d=cx.getImageData(0,0,N,N).data;pmask=new Uint8Array(NN);for(let i=0;i<NN;i++)pmask[i]=d[4*i+3]>127?1:0;}
     S.res={N,H,DT,days,ref,sun,am,pm,pot,bmask,pmask,parcelXY,refRes,trees:allTrees()};
-    log("Analyse terminée.");
+    busy("Mise en forme des résultats","Cartes, plans et rapport…",0.94);await tick();
     setupSlider();buildReport();setOverlay();$("btnPrint").disabled=false;$("btnPdf").disabled=false;
+    log("Analyse terminée.");ok=true;
   }catch(e){console.error(e);log("Erreur : "+e.message);}
+  busyEnd(ok,ok?"Analyse terminée – résultats sur la carte et dans le rapport":null);
+  if(!ok){busy("Erreur pendant l'analyse","Voir le message en bas du panneau de gauche.",0);$("busy").classList.add("done");busyTimer=setTimeout(()=>$("busy").classList.remove("show"),5000);}
+  $("btnRun").textContent="Analyser le site";
   $("btnRun").disabled=false;
 };
 
@@ -902,9 +925,9 @@ $("btnPdf").onclick=async()=>{const b=$("btnPdf");
   if(pdfFile){const touch=navigator.maxTouchPoints>0;
     try{if(touch&&navigator.canShare&&navigator.canShare({files:[pdfFile]})){await navigator.share({files:[pdfFile],title:pdfFile.name});return;}}catch(e){if(e.name==="AbortError")return;}
     const url=URL.createObjectURL(pdfFile),a=document.createElement("a");a.href=url;a.download=pdfFile.name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},5000);return;}
-  b.disabled=true;b.textContent="Préparation du PDF…";
-  try{pdfFile=await makePdf();b.textContent=(navigator.maxTouchPoints>0?"📤 Partager / enregistrer le PDF":"⬇ Télécharger le PDF");log(`PDF prêt : ${pdfFile.name} (${Math.round(pdfFile.size/1024)} ko).`);}
-  catch(e){console.error(e);b.textContent="Exporter le rapport en PDF";log("Échec de l'export PDF : "+e.message);}
+  b.disabled=true;b.textContent="Préparation du PDF…";busy("Préparation du PDF","Mise en page du rapport…",0.3);await tick();
+  try{pdfFile=await makePdf();b.textContent=(navigator.maxTouchPoints>0?"📤 Partager / enregistrer le PDF":"⬇ Télécharger le PDF");log(`PDF prêt : ${pdfFile.name} (${Math.round(pdfFile.size/1024)} ko).`);busyEnd(true,"PDF prêt – touchez le bouton pour l'enregistrer");}
+  catch(e){console.error(e);b.textContent="Exporter le rapport en PDF";log("Échec de l'export PDF : "+e.message);busyEnd(false);}
   b.disabled=false;};
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 $("btnPrint").onclick=()=>window.print();
