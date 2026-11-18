@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulateur d'ombre – course du soleil & ensoleillement</title>
+<style>
+/* Leaflet 1.9 – règles essentielles intégrées (pas de dépendance externe) */
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}
+.leaflet-container{overflow:hidden;position:relative;background:#ddd;outline-offset:1px;font-size:12px;-webkit-tap-highlight-color:transparent}
+.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.leaflet-tile::selection{background:transparent}
+.leaflet-safari .leaflet-tile{image-rendering:-webkit-optimize-contrast}
+.leaflet-safari .leaflet-tile-container{width:1600px;height:1600px;-webkit-transform-origin:0 0}
+.leaflet-marker-icon,.leaflet-marker-shadow{display:block}
+.leaflet-container .leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}
+.leaflet-container .leaflet-marker-pane img,.leaflet-container .leaflet-shadow-pane img,.leaflet-container .leaflet-tile-pane img,.leaflet-container img.leaflet-image-layer,.leaflet-container .leaflet-tile{max-width:none!important;max-height:none!important;width:auto;padding:0}
+.leaflet-container img.leaflet-tile{mix-blend-mode:plus-lighter}
+.leaflet-container.leaflet-touch-zoom{touch-action:pan-x pan-y}
+.leaflet-container.leaflet-touch-drag{touch-action:none}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom{touch-action:none}
+.leaflet-tile{filter:inherit;visibility:hidden}.leaflet-tile-loaded{visibility:inherit}
+.leaflet-zoom-box{width:0;height:0;box-sizing:border-box;z-index:800;border:2px dotted #38f;background:rgba(255,255,255,.5)}
+.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}
+.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both;cursor:auto}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}
+.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}
+.leaflet-right .leaflet-control{float:right}
+.leaflet-top .leaflet-control{margin-top:10px}.leaflet-bottom .leaflet-control{margin-bottom:10px}.leaflet-left .leaflet-control{margin-left:10px}.leaflet-right .leaflet-control{margin-right:10px}
+.leaflet-fade-anim .leaflet-popup{opacity:0;transition:opacity .2s linear}.leaflet-fade-anim .leaflet-map-pane .leaflet-popup{opacity:1}
+.leaflet-zoom-animated{transform-origin:0 0}svg.leaflet-zoom-animated{will-change:transform}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)}
+.leaflet-zoom-anim .leaflet-tile,.leaflet-pan-anim .leaflet-tile{transition:none}
+.leaflet-zoom-anim .leaflet-zoom-hide{visibility:hidden}
+.leaflet-interactive{cursor:pointer}.leaflet-grab{cursor:grab}
+.leaflet-crosshair,.leaflet-crosshair .leaflet-interactive{cursor:crosshair}
+.leaflet-popup-pane{cursor:auto}
+.leaflet-dragging .leaflet-grab,.leaflet-dragging .leaflet-grab .leaflet-interactive,.leaflet-dragging .leaflet-marker-draggable{cursor:grabbing}
+.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-image-layer,.leaflet-pane>svg path,.leaflet-tile-container{pointer-events:none}
+.leaflet-marker-icon.leaflet-interactive,.leaflet-image-layer.leaflet-interactive,.leaflet-pane>svg path.leaflet-interactive{pointer-events:auto}
+.leaflet-container a{color:#0078a8}
+.leaflet-bar{box-shadow:0 1px 5px rgba(0,0,0,.65);border-radius:4px}
+.leaflet-bar a{background:#fff;border-bottom:1px solid #ccc;width:30px;height:30px;line-height:30px;display:block;text-align:center;text-decoration:none;color:#000}
+.leaflet-bar a:first-child{border-top-left-radius:4px;border-top-right-radius:4px}
+.leaflet-bar a:last-child{border-bottom-left-radius:4px;border-bottom-right-radius:4px;border-bottom:none}
+.leaflet-control-zoom-in,.leaflet-control-zoom-out{font:bold 20px/30px monospace;text-indent:1px}
+.leaflet-touch .leaflet-control-layers,.leaflet-touch .leaflet-bar{box-shadow:none;border:2px solid rgba(0,0,0,.2);background-clip:padding-box}
+.leaflet-control-layers{box-shadow:0 1px 5px rgba(0,0,0,.4);background:#fff;border-radius:5px}
+.leaflet-control-layers-toggle{width:40px;height:40px;display:block;text-align:center;text-decoration:none!important;color:#333!important}
+.leaflet-control-layers-toggle::before{content:"🗺";font-size:22px;line-height:40px}
+.leaflet-control-layers .leaflet-control-layers-list,.leaflet-control-layers-expanded .leaflet-control-layers-toggle{display:none}
+.leaflet-control-layers-expanded .leaflet-control-layers-list{display:block;position:relative}
+.leaflet-control-layers-expanded{padding:6px 10px 6px 6px;color:#333;background:#fff}
+.leaflet-control-layers-scrollbar{overflow-y:scroll;overflow-x:hidden;padding-right:5px}
+.leaflet-control-layers label{display:block;font-size:13px;margin:3px 0;color:#333}
+.leaflet-control-layers-separator{height:0;border-top:1px solid #ddd;margin:5px -10px 5px -6px}
+.leaflet-container .leaflet-control-attribution{background:rgba(255,255,255,.8);margin:0}
+.leaflet-control-attribution,.leaflet-control-scale-line{padding:0 5px;color:#333;line-height:1.4;font-size:11px}
+.leaflet-control-scale-line{border:2px solid #777;border-top:none;line-height:1.1;padding:2px 5px 1px;white-space:nowrap;box-sizing:border-box;background:rgba(255,255,255,.8)}
+.leaflet-control-scale-line:not(:first-child){border-top:2px solid #777;border-bottom:none;margin-top:-2px}
+.leaflet-popup{position:absolute;text-align:center;margin-bottom:20px}
+.leaflet-popup-content-wrapper{padding:1px;text-align:left;border-radius:12px;background:#fff;color:#333;box-shadow:0 3px 14px rgba(0,0,0,.4)}
+.leaflet-popup-content{margin:13px 24px 13px 20px;line-height:1.35;font-size:13px;min-height:1px}
+.leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-top:-1px;margin-left:-20px;overflow:hidden;pointer-events:none}
+.leaflet-popup-tip{width:17px;height:17px;padding:1px;margin:-10px auto 0;pointer-events:auto;transform:rotate(45deg);background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.4)}
+.leaflet-container a.leaflet-popup-close-button{position:absolute;top:0;right:0;border:none;text-align:center;width:28px;height:28px;font:18px/28px sans-serif;color:#757575;text-decoration:none;background:transparent}
+.leaflet-tooltip{position:absolute;padding:5px 7px;background:#fff;border:1px solid #fff;border-radius:3px;color:#222;white-space:nowrap;user-select:none;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.leaflet-tooltip-top{margin-top:-6px}.leaflet-tooltip-bottom{margin-top:6px}.leaflet-tooltip-left{margin-left:-6px}.leaflet-tooltip-right{margin-left:6px}
+.center-pin{width:30px!important;height:30px!important;margin:-15px 0 0 -15px!important;border-radius:50%;background:rgba(255,255,255,.25);border:3px solid #fff;box-shadow:0 0 0 2px #c0392b,0 2px 6px rgba(0,0,0,.5);display:flex!important;align-items:center;justify-content:center;font:bold 18px/1 system-ui;color:#c0392b}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--ink:#1f2a24;--mute:#66736b;--line:#d9dfd9;--bg:#f6f7f3;--acc:#3f6b4a;--sun:#f2c230}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+header{padding:10px 16px;background:#22362a;color:#fff;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:600}
+header span{opacity:.75;font-size:12.5px}
+#app{display:grid;grid-template-columns:320px minmax(0,1fr);min-height:calc(100vh - 44px)}
+#side{padding:12px 14px;border-right:1px solid var(--line);background:#fff;overflow:auto;max-height:calc(100vh - 44px)}
+#main{display:flex;flex-direction:column;min-width:0}
+#map{height:62vh;min-height:380px;width:100%;position:relative;z-index:0}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:8px 10px 10px}
+legend{font-weight:600;font-size:12.5px;color:var(--acc);padding:0 4px}
+label{display:block;font-size:12.5px;color:var(--mute);margin:6px 0 2px}
+input,select,button{font:inherit}
+input[type=text],input[type=date],input[type=number],select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{padding:7px 10px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;cursor:pointer}
+button.sec{background:#fff;color:var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+button.on{background:#c7792b;border-color:#c7792b;color:#fff}
+#results div{padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+#results div:hover{background:#eef3ee}
+#log{font-size:12px;color:var(--mute);white-space:pre-line;max-height:140px;overflow:auto;margin-top:6px}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);margin:5px 0}
+#bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#bar input[type=range]{flex:1;min-width:180px}
+#timeLbl{font-variant-numeric:tabular-nums;min-width:210px;font-weight:600}
+.lay{display:flex;gap:6px;flex-wrap:wrap}
+.lay label{display:flex;gap:4px;align-items:center;margin:0;color:var(--ink);font-size:13px;border:1px solid var(--line);padding:3px 7px;border-radius:14px;cursor:pointer}
+#info{font-size:13px;background:#fbfbf7;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px;display:none}
+#report{padding:18px 22px;background:#fff;margin:12px;border-radius:10px;border:1px solid var(--line)}
+#report h2{font-size:18px;margin:4px 0 2px}#report h3{font-size:15px;margin:22px 0 8px;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:4px}
+.meta{color:var(--mute);font-size:12.5px}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left}th{background:#f1f4ef}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.grid figure{margin:0;border:1px solid var(--line);border-radius:6px;padding:4px;break-inside:avoid}
+.grid canvas,.plan canvas{width:100%;height:auto;display:block}
+figcaption{font-size:11.5px;color:var(--mute);text-align:center;margin-top:2px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.plan{break-inside:avoid}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;margin:6px 0}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-3px;margin-right:4px;border:1px solid #0002}
+.note{font-size:12px;color:var(--mute)}
+.pix{image-rendering:pixelated}
+.hint{font-size:12px;color:var(--mute);margin-top:4px}
+.empty{color:var(--mute);font-style:italic}
+@media (max-width:900px){#app{grid-template-columns:1fr}#side{max-height:none;border-right:0;border-bottom:1px solid var(--line)}#map{height:60vh}}
+html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
+@media print{
+  header,#side,#map,#bar,.noprint{display:none!important}
+  #app{display:block}#report{margin:0;border:0;padding:0}
+  body{background:#fff}h3{break-after:avoid}
+  .plans{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<header><h1>☀ Simulateur d'ombre</h1><span>Course du soleil, ombres portées et temps d'ensoleillement pour plans de plantation</span></header>
+<div id="app">
+<aside id="side">
+  <fieldset><legend>1. Lieu</legend>
+    <div class="row"><input id="addr" type="text" placeholder="Adresse (ex. 12 rue des Lilas, Nantes)"><button id="btnGeo" style="flex:0 0 auto">Chercher</button></div>
+    <div id="results"></div>
+    <div class="hint">Vous pouvez aussi cliquer sur la carte ou déplacer le repère ⊕ pour centrer la zone d'étude.</div>
+    <label>Nom du projet (pour le rapport)</label><input id="proj" type="text" placeholder="Jardin …">
+  </fieldset>
+  <fieldset><legend>2. Période d'analyse des ombres</legend>
+    <select id="mode"><option value="day">Un jour précis</option><option value="period">Une période (moyenne)</option></select>
+    <div id="dayBox"><label>Date</label><input id="date" type="date"></div>
+    <div id="perBox" style="display:none"><div class="row"><div><label>Du</label><input id="d1" type="date"></div><div><label>Au</label><input id="d2" type="date"></div></div></div>
+    <div class="hint">Par défaut : solstice d'été (21 juin), jour le plus ensoleillé.</div>
+  </fieldset>
+  <fieldset><legend>3. Zone & hypothèses</legend>
+    <div class="row">
+      <div><label>Côté de la zone (m)</label><select id="size"><option>40</option><option selected>60</option><option>80</option><option>120</option><option>160</option></select></div>
+      <div><label>Précision</label><select id="res"><option value="100">Rapide</option><option value="140" selected>Normale</option><option value="200">Fine</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Hauteur bâti inconnu (m)</label><input id="hdef" type="number" value="6" min="2" max="60" step="0.5"></div>
+      <div><label>Pas de temps (min)</label><select id="dt"><option>5</option><option selected>10</option><option>15</option></select></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="useVeg" checked>Végétation OpenStreetMap (arbres, haies, bois)</label>
+    <label class="chk"><input type="checkbox" id="useTerrain" checked>Relief lointain (masque d'horizon)</label>
+  </fieldset>
+  <fieldset><legend>4. Compléter le site</legend>
+    <button id="btnTree" class="sec" style="width:100%">＋ Ajouter des arbres (clic sur la carte)</button>
+    <div class="row"><div><label>Hauteur arbre (m)</label><input id="th" type="number" value="8" min="1" max="40" step="0.5"></div><div><label>Ø couronne (m)</label><input id="td" type="number" value="6" min="0.5" max="30" step="0.5"></div></div>
+    <div class="hint">Cliquez un bâtiment pour corriger sa hauteur ; cliquez un arbre ajouté pour le supprimer. Relancez ensuite l'analyse.</div>
+  </fieldset>
+  <button id="btnRun" style="width:100%;padding:10px" disabled>Analyser le site</button>
+  <button id="btnPrint" class="sec" style="width:100%;margin-top:6px" disabled>Imprimer / enregistrer le rapport en PDF</button>
+  <div id="log"></div>
+  <div id="info"></div>
+</aside>
+<main id="main">
+  <div id="map"></div>
+  <div id="bar">
+    <div class="lay">
+      <label><input type="radio" name="ov" value="shadow" checked>Ombres à l'heure</label>
+      <label><input type="radio" name="ov" value="class">Zones (soleil / mi-ombre / ombre)</label>
+      <label><input type="radio" name="ov" value="hours">Heures de soleil</label>
+      <label><input type="radio" name="ov" value="ampm">Matin / après-midi</label>
+      <label><input type="radio" name="ov" value="none">Aucune</label>
+      <label><input type="checkbox" id="showPath" checked>Course du soleil</label>
+    </div>
+    <input id="tslider" type="range" min="0" max="100" value="50" disabled>
+    <span id="timeLbl">—</span>
+  </div>
+  <section id="report"><p class="empty">Cherchez une adresse puis lancez l'analyse : le rapport (course du soleil par saison, ombres heure par heure, zones d'ensoleillement) s'affichera ici.</p></section>
+</main>
+</div>
+
+<script>
+"use strict";
+/* ================= Astronomie (algorithme SunCalc, V. Agafonkin, BSD) ================= */
+const RAD=Math.PI/180, DAYMS=864e5, J1970=2440588, J2000=2451545, OBL=RAD*23.4397;
+function toDays(ms){return ms/DAYMS-0.5+J1970-J2000;}
+function sunPos(ms,lat,lon){
+  const d=toDays(ms), M=RAD*(357.5291+0.98560028*d);
+  const C=RAD*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));
+  const L=M+C+RAD*102.9372+Math.PI;
+  const dec=Math.asin(Math.sin(OBL)*Math.sin(L)), ra=Math.atan2(Math.sin(L)*Math.cos(OBL),Math.cos(L));
+  const phi=RAD*lat;
+  const Hh=RAD*(280.16+360.9856235*d)+RAD*lon-ra;
+  const alt=Math.asin(Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(Hh));
+  const az=Math.atan2(Math.sin(Hh),Math.cos(Hh)*Math.sin(phi)-Math.tan(dec)*Math.cos(phi));
+  let alt0=alt/RAD; // réfraction atmosphérique (Bennett) pour h > -1°
+  if(alt0>-1) alt0+=1.02/Math.tan(RAD*(alt0+10.3/(alt0+5.11)))/60;
+  return {alt:alt0, az:((az/RAD+180)%360+360)%360}; // az : depuis le nord, sens horaire
+}
+/* ================= Fuseau horaire ================= */
+const TZ=(Intl.DateTimeFormat().resolvedOptions().timeZone)||"Europe/Paris";
+const fmtHM=new Intl.DateTimeFormat("fr-FR",{timeZone:TZ,hour:"2-digit",minute:"2-digit"});
+function hm(ms){return fmtHM.format(new Date(ms));}
+function tzOff(ms){const p={};for(const x of new Intl.DateTimeFormat("en-US",{timeZone:TZ,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(new Date(ms)))p[x.type]=x.value;return (Date.UTC(+p.year,p.month-1,+p.day,+p.hour,+p.minute,+p.second)-ms)/6e4;}
+function dayStart(iso){const [y,m,d]=iso.split("-").map(Number);const g=Date.UTC(y,m-1,d,12);return Date.UTC(y,m-1,d)-tzOff(g)*6e4;}
+function frDate(iso){const [y,m,d]=iso.split("-").map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric",timeZone:"UTC"});}
+function isoAdd(iso,n){const [y,m,d]=iso.split("-").map(Number);return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10);}
+function fmtH(min){const h=Math.floor(min/60+1e-9),m=Math.round(min-h*60);return h+" h "+String(m===60?0:m).padStart(2,"0");}
+
+/* ================= État ================= */
+const S={lat0:null,lon0:null,mx:1,my:110540,addr:"",fetchedKey:null,buildings:[],veg:[],trees:[],userTrees:[],hEdits:{},horizon:null,z0:null,res:null,sources:[]};
+function setOrigin(lat,lon){S.lat0=lat;S.lon0=lon;S.mx=111320*Math.cos(lat*RAD);}
+function toXY(lat,lon){return [(lon-S.lon0)*S.mx,(lat-S.lat0)*S.my];}
+function toLL(x,y){return [S.lat0+y/S.my,S.lon0+x/S.mx];}
+const $=id=>document.getElementById(id);
+function log(t){$("log").textContent+=t+"\n";$("log").scrollTop=1e9;}
+
+/* ================= Carte ================= */
+if(typeof L==="undefined"){document.getElementById("map").innerHTML="<div style='padding:30px;text-align:center;color:#555'>La carte n'a pas pu se charger.<br>Ouvrez ce fichier dans Safari, Chrome ou Firefox avec une connexion Internet (pas dans un aperçu de fichier).</div>";throw new Error("Leaflet indisponible");}
+const map=L.map("map",{zoomControl:true,tap:false}).setView([46.6,2.4],6);
+const ign=(layer,fmt)=>L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=normal&TILEMATRIXSET=PM&FORMAT=${fmt}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,{maxNativeZoom:19,maxZoom:22,attribution:"© IGN Géoplateforme"});
+const baseOrtho=ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg");
+const basePlan=ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png");
+const baseCarto=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",{maxNativeZoom:19,maxZoom:22,attribution:"© OpenStreetMap, © CARTO"});
+baseOrtho.addTo(map);
+L.control.layers({"Photo aérienne (IGN)":baseOrtho,"Plan IGN":basePlan,"Plan clair (OSM)":baseCarto},{},{position:"topright"}).addTo(map);
+L.control.scale({imperial:false}).addTo(map);
+const gObst=L.layerGroup().addTo(map), gUser=L.layerGroup().addTo(map), gPath=L.layerGroup().addTo(map), gSun=L.layerGroup().addTo(map);
+let marker=null, zoneRect=null, overlay=null;
+function half(){return +$("size").value/2;}
+function setCenter(lat,lon,label){
+  setOrigin(lat,lon);S.addr=label||S.addr||(lat.toFixed(5)+", "+lon.toFixed(5));
+  if(!marker){marker=L.marker([lat,lon],{draggable:true,title:"Centre de la zone d'étude",icon:L.divIcon({className:"center-pin",html:"+",iconSize:[30,30]})}).addTo(map);
+    marker.on("dragend",e=>{const p=e.target.getLatLng();setCenter(p.lat,p.lng,null);});}
+  else marker.setLatLng([lat,lon]);
+  drawZone();$("btnRun").disabled=false;drawSunPathOnMap();
+}
+function drawZone(){if(S.lat0==null)return;const h=half();const b=[toLL(-h,-h),toLL(h,h)];
+  if(zoneRect)zoneRect.setBounds(b);else zoneRect=L.rectangle(b,{color:"#fff",weight:2,dashArray:"6 4",fill:false,interactive:false}).addTo(map);}
+$("size").onchange=()=>{drawZone();drawSunPathOnMap();};
+
+/* ================= Géocodage ================= */
+async function geocode(){
+  const q=$("addr").value.trim();if(!q)return;$("results").innerHTML="<div class='empty'>Recherche…</div>";
+  let list=[],netOK=false;
+  try{const r=await fetch("https://api-adresse.data.gouv.fr/search/?limit=5&q="+encodeURIComponent(q));const j=await r.json();
+    netOK=true;list=j.features.map(f=>({label:f.properties.label,lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]}));}catch(e){}
+  if(!list.length){try{const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="+encodeURIComponent(q));const j=await r.json();netOK=true;
+    list=j.map(f=>({label:f.display_name,lat:+f.lat,lon:+f.lon}));}catch(e){}}
+  if(!list.length&&!netOK){$("results").innerHTML="<div class='empty'>Impossible de joindre le service d'adresses. Si vous êtes dans un aperçu de fichier ou sur la page claude.ai, ouvrez l'outil dans un navigateur connecté à Internet.</div>";return;}
+  $("results").innerHTML=list.length?"":"<div class='empty'>Aucun résultat</div>";
+  list.forEach(it=>{const d=document.createElement("div");d.textContent=it.label;d.onclick=()=>{$("results").innerHTML="";$("addr").value=it.label;setCenter(it.lat,it.lon,it.label);map.setView([it.lat,it.lon],19);};$("results").appendChild(d);});
+  if(list.length===1)$("results").firstChild.click();
+}
+$("btnGeo").onclick=geocode;$("addr").onkeydown=e=>{if(e.key==="Enter")geocode();};
+
+/* ================= Arbres ajoutés / édition ================= */
+let treeMode=false;
+$("btnTree").onclick=()=>{treeMode=!treeMode;$("btnTree").classList.toggle("on",treeMode);$("btnTree").textContent=treeMode?"✓ Mode ajout actif (cliquer pour arrêter)":"＋ Ajouter des arbres (clic sur la carte)";map.getContainer().style.cursor=treeMode?"crosshair":"";};
+map.on("click",e=>{
+  if(treeMode){S.userTrees.push({lat:e.latlng.lat,lon:e.latlng.lng,h:+$("th").value,r:+$("td").value/2});drawUserTrees();return;}
+  if(S.lat0==null)setCenter(e.latlng.lat,e.latlng.lng,null);
+  else if(S.res)inspect(e.latlng);
+});
+function drawUserTrees(){gUser.clearLayers();S.userTrees.forEach((t,i)=>{L.circle([t.lat,t.lon],{radius:t.r,color:"#1d7a2e",weight:2,fillColor:"#3fbf55",fillOpacity:.35})
+  .bindPopup(`<b>Arbre ajouté</b><br>h ${t.h} m – Ø ${2*t.r} m<br><button onclick="delTree(${i})">Supprimer</button>`).addTo(gUser);});}
+window.delTree=i=>{S.userTrees.splice(i,1);map.closePopup();drawUserTrees();};
+window.setH=id=>{const v=parseFloat(document.getElementById("hin_"+id).value);if(v>0){S.hEdits[id]=v;const b=S.buildings.find(x=>x.id===id);if(b){b.h=v;b.src="saisie";}map.closePopup();drawObstacles();log("Hauteur modifiée : "+v+" m – relancez l'analyse.");}};
+
+/* ================= Données ================= */
+function ringXY(coords){return coords.map(c=>toXY(c[1],c[0]));}
+function ccw(r){let a=0;for(let i=0;i<r.length;i++){const p=r[i],q=r[(i+1)%r.length];a+=p[0]*q[1]-q[0]*p[1];}return a<0?r.slice().reverse():r;}
+function parseH(v){if(v==null)return NaN;const n=parseFloat(String(v).replace(",","."));return isFinite(n)?n:NaN;}
+async function fetchIGN(bb){
+  const url=`https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=BDTOPO_V3:batiment&OUTPUTFORMAT=application/json&COUNT=3000&SRSNAME=urn:ogc:def:crs:EPSG::4326&BBOX=${bb.s},${bb.w},${bb.n},${bb.e},urn:ogc:def:crs:EPSG::4326`;
+  const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();
+  if(!j.features||!j.features.length)throw new Error("aucun bâtiment");
+  const out=[];
+  for(const f of j.features){const g=f.geometry;if(!g)continue;const polys=g.type==="Polygon"?[g.coordinates]:g.type==="MultiPolygon"?g.coordinates:[];
+    let k=0;for(const p of polys){let ring=p[0].map(c=>[c[0],c[1]]);
+      // ordre des axes : on veut [lon,lat]
+      const c0=ring[0];if(Math.abs(c0[0]-S.lat0)<Math.abs(c0[0]-S.lon0))ring=ring.map(c=>[c[1],c[0]]);
+      if(Math.abs(ring[0][0])>180)throw new Error("projection inattendue");
+      const P=f.properties||{};let h=parseH(P.hauteur),src="IGN BD TOPO";
+      if(!(h>0)&&P.nombre_d_etages>0){h=P.nombre_d_etages*3+1;src="IGN (étages)";}
+      if(!(h>0)){h=NaN;src="défaut";}
+      out.push({id:"ign_"+(P.cleabs||f.id)+"_"+(k++),ll:ring,h,src});}}
+  return out;
+}
+async function fetchOSM(bb,wantBuildings){
+  const B=`(${bb.s},${bb.w},${bb.n},${bb.e})`;
+  const q=`[out:json][timeout:60];(${wantBuildings?`way["building"]${B};relation["building"]${B};`:""}node["natural"="tree"]${B};way["natural"="tree_row"]${B};way["barrier"="hedge"]${B};way["natural"~"^(wood|scrub)$"]${B};way["landuse"="forest"]${B};);out geom;`;
+  const eps=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+  for(const ep of eps){try{const r=await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});if(r.ok)return (await r.json()).elements;}catch(e){}}
+  throw new Error("Overpass indisponible");
+}
+async function fetchHorizon(){
+  const az=[],pts=[[S.lat0,S.lon0]],D=[120,250,450,750,1100,1600,2300,3200,4500,6000];
+  for(let a=0;a<360;a+=10)for(const d of D){const x=d*Math.sin(a*RAD),y=d*Math.cos(a*RAD);pts.push(toLL(x,y));az.push([a,d]);}
+  const el=[];for(let i=0;i<pts.length;i+=100){const ch=pts.slice(i,i+100);
+    const r=await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${ch.map(p=>p[0].toFixed(5)).join(",")}&longitude=${ch.map(p=>p[1].toFixed(5)).join(",")}`);
+    const j=await r.json();el.push(...j.elevation);}
+  const z0=el[0]+1.5,hor=new Array(36).fill(0);
+  az.forEach(([a,d],i)=>{const z=el[i+1]-d*d/(2*6371000)*0.87;const ang=Math.atan2(z-z0,d)/RAD;const k=a/10;if(ang>hor[k])hor[k]=ang;});
+  S.z0=el[0];return hor;
+}
+function horizonAt(b){if(!S.horizon||!$("useTerrain").checked)return 0;const f=b/10,i=Math.floor(f)%36,j=(i+1)%36,t=f-Math.floor(f);return S.horizon[i]*(1-t)+S.horizon[j]*t;}
+
+async function loadData(){
+  const key=[S.lat0.toFixed(6),S.lon0.toFixed(6),half()].join("|");
+  if(S.fetchedKey===key)return;
+  const M=half()+150;const [s,w]=toLL(-M,-M),[n,e]=toLL(M,M);const bb={s,w,n,e};
+  S.sources=[];let raw=[];
+  log("Bâtiments : interrogation IGN BD TOPO…");
+  try{raw=await fetchIGN(bb);S.sources.push("Bâtiments et hauteurs : IGN BD TOPO® (Géoplateforme)");log(`  ${raw.length} bâtiments IGN.`);}
+  catch(err){log("  IGN indisponible ("+err.message+"), repli sur OpenStreetMap.");raw=null;}
+  let els=[];
+  try{log("Végétation"+(raw?"":" et bâtiments")+" : OpenStreetMap…");els=await fetchOSM(bb,!raw);}
+  catch(err){log("  "+err.message);}
+  S.buildings=[];S.veg=[];S.trees=[];
+  if(raw)raw.forEach(b=>S.buildings.push({id:b.id,ring:ccw(ringXY(b.ll)),h:b.h,src:b.src}));
+  let nOsmB=0;
+  for(const el of els){const t=el.tags||{};
+    if(t.building&&el.type==="way"&&el.geometry&&el.geometry.length>3){
+      let h=parseH(t.height),src="OSM";if(!(h>0)&&t["building:levels"]){h=parseH(t["building:levels"])*3+1;src="OSM (étages)";}if(!(h>0)){h=NaN;src="défaut";}
+      S.buildings.push({id:"osm_"+el.id,ring:ccw(el.geometry.map(g=>toXY(g.lat,g.lon))),h,src});nOsmB++;}
+    else if(t.building&&el.type==="relation"&&el.members){el.members.filter(m=>m.role==="outer"&&m.geometry&&m.geometry.length>3).forEach((m,k)=>{
+      let h=parseH(t.height);if(!(h>0)&&t["building:levels"])h=parseH(t["building:levels"])*3+1;
+      S.buildings.push({id:"osmr_"+el.id+"_"+k,ring:ccw(m.geometry.map(g=>toXY(g.lat,g.lon))),h:h>0?h:NaN,src:h>0?"OSM":"défaut"});nOsmB++;});}
+    else if(el.type==="node"&&t.natural==="tree"){const h=parseH(t.height)>0?parseH(t.height):8;const dc=parseH(t.diameter_crown);
+      const [x,y]=toXY(el.lat,el.lon);S.trees.push({x,y,h,r:dc>0?dc/2:Math.max(1.5,h*0.35),hb:h*0.3,src:"OSM"});}
+    else if(el.type==="way"&&el.geometry&&(t.natural==="tree_row"||t.barrier==="hedge")){
+      const hedge=t.barrier==="hedge";const h=parseH(t.height)>0?parseH(t.height):(hedge?2:9),r=hedge?0.7:3,step=hedge?1:6;
+      const g=el.geometry.map(p=>toXY(p.lat,p.lon));
+      for(let i=0;i<g.length-1;i++){const [x1,y1]=g[i],[x2,y2]=g[i+1],L_=Math.hypot(x2-x1,y2-y1),n=Math.max(1,Math.round(L_/step));
+        for(let k=0;k<=n;k++){if(k===n&&i<g.length-2)continue;S.trees.push({x:x1+(x2-x1)*k/n,y:y1+(y2-y1)*k/n,h,r,hb:hedge?0:h*0.3,src:hedge?"OSM haie":"OSM alignement"});}}}
+    else if(el.type==="way"&&el.geometry&&el.geometry.length>3&&(t.natural==="wood"||t.landuse==="forest"||t.natural==="scrub")){
+      const h=parseH(t.height)>0?parseH(t.height):(t.natural==="scrub"?2.5:15);
+      S.veg.push({ring:ccw(el.geometry.map(g=>toXY(g.lat,g.lon))),h,kind:t.natural==="scrub"?"fourrés":"bois"});}
+  }
+  if(!raw&&nOsmB)S.sources.push("Bâtiments : OpenStreetMap (hauteurs souvent absentes → valeur par défaut)");
+  if(els.length)S.sources.push("Végétation : OpenStreetMap (arbres isolés, alignements, haies, bois)");
+  S.buildings.forEach(b=>{if(S.hEdits[b.id]){b.h=S.hEdits[b.id];b.src="saisie";}});
+  log(`  ${S.buildings.length} bâtiments, ${S.trees.length} arbres/haies, ${S.veg.length} massifs boisés.`);
+  if($("useTerrain").checked){try{log("Relief : profil d'horizon (Open-Meteo / Copernicus DEM)…");S.horizon=await fetchHorizon();
+      S.sources.push("Relief : modèle numérique de terrain Copernicus 90 m via Open-Meteo");log(`  altitude ${Math.round(S.z0)} m, horizon max ${Math.max(...S.horizon).toFixed(1)}°.`);}
+    catch(e){S.horizon=null;log("  relief indisponible, horizon plat.");}}
+  S.fetchedKey=key;drawObstacles();
+}
+function bH(b){return b.h>0?b.h:+$("hdef").value;}
+function drawObstacles(){gObst.clearLayers();
+  S.buildings.forEach(b=>{const ll=b.ring.map(p=>toLL(p[0],p[1]));
+    L.polygon(ll,{color:b.src==="défaut"?"#ff8a3d":"#ffffff",weight:1,fillOpacity:.08})
+     .bindPopup(`<b>Bâtiment</b><br>Hauteur : ${bH(b).toFixed(1)} m <small>(${b.src})</small><br><input id="hin_${b.id}" type="number" step="0.5" value="${bH(b).toFixed(1)}" style="width:70px"> m <button onclick="setH('${b.id}')">OK</button>`).addTo(gObst);});
+  S.trees.forEach(t=>L.circle(toLL(t.x,t.y),{radius:t.r,color:"#6fdc7f",weight:1,fillOpacity:.1,interactive:false}).addTo(gObst));
+}
+
+/* ================= Moteur d'ombres (rastérisation canvas) ================= */
+function allTrees(){return S.trees.concat(S.userTrees.map(t=>{const [x,y]=toXY(t.lat,t.lon);return {x,y,h:t.h,r:t.r,hb:t.h*0.3};}));}
+function makeCtx(N){const c=document.createElement("canvas");c.width=c.height=N;return c.getContext("2d",{willReadFrequently:true});}
+function setT(ctx,N,H){const k=N/(2*H);ctx.setTransform(k,0,0,-k,N/2,N/2);}
+function pathPrism(ctx,ring,h,ux,uy){ // empreinte + quadrilatères des arêtes, tous orientés dans le même sens
+  ctx.moveTo(ring[0][0],ring[0][1]);for(let i=1;i<ring.length;i++)ctx.lineTo(ring[i][0],ring[i][1]);ctx.closePath();
+  if(!(h>0))return;const dx=ux*h,dy=uy*h;
+  for(let i=0;i<ring.length;i++){const p=ring[i],q=ring[(i+1)%ring.length];
+    const a=[p,q,[q[0]+dx,q[1]+dy],[p[0]+dx,p[1]+dy]];
+    let s=0;for(let j=0;j<4;j++){const m=a[j],n=a[(j+1)%4];s+=m[0]*n[1]-n[0]*m[1];}
+    if(Math.abs(s)<1e-9)continue;const o=s>0?a:a.reverse();
+    ctx.moveTo(o[0][0],o[0][1]);ctx.lineTo(o[1][0],o[1][1]);ctx.lineTo(o[2][0],o[2][1]);ctx.lineTo(o[3][0],o[3][1]);ctx.closePath();}
+}
+function drawShadow(ctx,N,H,sun,trees,color){
+  ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,N,N);setT(ctx,N,H);
+  const k=1/Math.tan(Math.max(sun.alt,0.5)*RAD),ux=-Math.sin(sun.az*RAD)*k,uy=-Math.cos(sun.az*RAD)*k;
+  ctx.fillStyle=color;ctx.strokeStyle=color;ctx.beginPath();
+  for(const b of S.buildings)pathPrism(ctx,b.ring,bH(b),ux,uy);
+  for(const v of S.veg)pathPrism(ctx,v.ring,v.h,ux,uy);
+  ctx.fill("nonzero");
+  ctx.lineCap="round";
+  for(const t of trees){ctx.beginPath();ctx.lineWidth=2*t.r;const x1=t.x+ux*t.hb,y1=t.y+uy*t.hb,x2=t.x+ux*t.h,y2=t.y+uy*t.h;ctx.moveTo(x1,y1);ctx.lineTo(x2+1e-3,y2);ctx.stroke();}
+}
+function footprintMask(N,H){const ctx=makeCtx(N);setT(ctx,N,H);ctx.fillStyle="#000";ctx.beginPath();for(const b of S.buildings)pathPrism(ctx,b.ring,0,0,0);ctx.fill("nonzero");
+  const d=ctx.getImageData(0,0,N,N).data,m=new Uint8Array(N*N);for(let i=0;i<N*N;i++)m[i]=d[4*i+3]>127?1:0;return m;}
+
+function simulateDay(iso,N,H,DT,keepTimeline){
+  const t0=dayStart(iso),steps=Math.round(1440/DT),trees=allTrees(),ctx=makeCtx(N),NN=N*N;
+  const sun=new Float32Array(NN),am=new Float32Array(NN),pm=new Float32Array(NN);
+  const tl=keepTimeline?new Uint8Array(NN*steps):null,times=[],pos=[];
+  let noon=t0,maxA=-90;
+  for(let i=0;i<steps;i++){const t=t0+(i+0.5)*DT*6e4,p=sunPos(t,S.lat0,S.lon0);times.push(t);pos.push(p);if(p.alt>maxA){maxA=p.alt;noon=t;}}
+  let pot=0;
+  for(let i=0;i<steps;i++){const p=pos[i];if(p.alt<=0.5||p.alt<=horizonAt(p.az))continue;
+    pot+=DT;drawShadow(ctx,N,H,p,trees,"#000");const d=ctx.getImageData(0,0,N,N).data,isAM=times[i]<noon;
+    for(let c=0;c<NN;c++){const lit=d[4*c+3]<128;if(lit){sun[c]+=DT;if(isAM)am[c]+=DT;else pm[c]+=DT;}if(tl)tl[i*NN+c]=lit?2:1;}}
+  return {sun,am,pm,pot,tl,times,pos,steps,noon,t0};
+}
+
+/* ================= Analyse ================= */
+const CL=[{k:"Plein soleil",min:6*60,col:"#f6c945",d:"≥ 6 h de soleil direct"},{k:"Mi-ombre",min:3*60,col:"#a9c46c",d:"3 à 6 h"},{k:"Ombre",min:60,col:"#5b8db8",d:"1 à 3 h"},{k:"Ombre dense",min:-1,col:"#2f4a6d",d:"< 1 h"}];
+function classOf(m){for(let i=0;i<CL.length;i++)if(m>=CL[i].min)return i;return 3;}
+$("mode").onchange=()=>{const p=$("mode").value==="period";$("dayBox").style.display=p?"none":"";$("perBox").style.display=p?"":"none";};
+(function initDates(){const now=new Date(),y=(now.getMonth()>5||(now.getMonth()===5&&now.getDate()>21))?now.getFullYear()+1:now.getFullYear();
+  $("date").value=`${y}-06-21`;$("d1").value=`${y}-06-15`;$("d2").value=`${y}-08-15`;})();
+
+$("btnRun").onclick=async()=>{
+  $("btnRun").disabled=true;$("log").textContent="";
+  try{
+    await loadData();
+    const N=+$("res").value,H=half(),DT=+$("dt").value;
+    let days,ref;
+    if($("mode").value==="day"){days=[$("date").value];ref=days[0];}
+    else{let a=$("d1").value,b=$("d2").value;if(a>b)[a,b]=[b,a];days=[];for(let d=a;d<=b;d=isoAdd(d,5))days.push(d);if(days[days.length-1]!==b)days.push(b);ref=days[Math.floor(days.length/2)];}
+    log(`Calcul des ombres (${days.length} jour${days.length>1?"s":""}, grille ${N}×${N}, cellule ${(2*H/N).toFixed(2)} m)…`);
+    await new Promise(r=>setTimeout(r,30));
+    const NN=N*N,sun=new Float32Array(NN),am=new Float32Array(NN),pm=new Float32Array(NN);let pot=0,refRes=null;
+    for(const d of days){const r=simulateDay(d,N,H,DT,d===ref);for(let c=0;c<NN;c++){sun[c]+=r.sun[c]/days.length;am[c]+=r.am[c]/days.length;pm[c]+=r.pm[c]/days.length;}pot+=r.pot/days.length;if(d===ref)refRes=r;await new Promise(r=>setTimeout(r,0));}
+    const bmask=footprintMask(N,H);
+    S.res={N,H,DT,days,ref,sun,am,pm,pot,bmask,refRes,trees:allTrees()};
+    log("Analyse terminée.");
+    setupSlider();buildReport();setOverlay();$("btnPrint").disabled=false;
+  }catch(e){console.error(e);log("Erreur : "+e.message);}
+  $("btnRun").disabled=false;
+};
+
+/* ================= Superpositions carte ================= */
+function zoneBounds(){const H=S.res.H;return [toLL(-H,-H),toLL(H,H)];}
+function cellColorCanvas(fn){const {N}=S.res;const c=document.createElement("canvas");c.width=c.height=N;const ctx=c.getContext("2d"),img=ctx.createImageData(N,N);
+  for(let i=0;i<N*N;i++){const col=fn(i);if(!col)continue;img.data[4*i]=col[0];img.data[4*i+1]=col[1];img.data[4*i+2]=col[2];img.data[4*i+3]=col[3]??255;}ctx.putImageData(img,0,0);return c;}
+function hex(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function ramp(t){const s=[[47,74,109],[62,131,160],[120,182,130],[220,205,90],[250,190,50]];t=Math.max(0,Math.min(1,t))*(s.length-1);const i=Math.min(s.length-2,Math.floor(t)),f=t-i;return s[i].map((v,k)=>Math.round(v+(s[i+1][k]-v)*f));}
+function ampmCol(a,p){const tot=a+p;if(tot<60)return [90,90,90];const r=(p-a)/tot;const A=[76,155,232],P=[232,131,58],M=[235,230,215];const f=Math.abs(r),T=r<0?A:P;return M.map((v,k)=>Math.round(v+(T[k]-v)*f));}
+function layerCanvas(kind){const R=S.res;const mx=Math.max(1,R.pot);
+  if(kind==="class")return cellColorCanvas(i=>R.bmask[i]?null:hex(CL[classOf(R.sun[i])].col));
+  if(kind==="hours")return cellColorCanvas(i=>R.bmask[i]?null:ramp(R.sun[i]/mx));
+  if(kind==="ampm")return cellColorCanvas(i=>R.bmask[i]?null:ampmCol(R.am[i],R.pm[i]));}
+let curStep=0;
+function setupSlider(){const r=S.res.refRes;const lit=[];r.pos.forEach((p,i)=>{if(p.alt>0.5)lit.push(i);});
+  const sl=$("tslider");sl.min=lit[0];sl.max=lit[lit.length-1];
+  let best=lit[0],bd=1e9;r.times.forEach((t,i)=>{const d=Math.abs(t-(r.t0+15*36e5));if(d<bd&&p_ok(i)){bd=d;best=i;}});function p_ok(i){return r.pos[i].alt>0.5;}
+  sl.value=best;sl.disabled=false;curStep=best;}
+$("tslider").oninput=e=>{curStep=+e.target.value;if(document.querySelector("input[name=ov]:checked").value!=="shadow")document.querySelector("input[name=ov][value=shadow]").checked=true;setOverlay();};
+document.querySelectorAll("input[name=ov]").forEach(r=>r.onchange=setOverlay);
+$("showPath").onchange=drawSunPathOnMap;
+function setOverlay(){if(overlay){map.removeLayer(overlay);overlay=null;}gSun.clearLayers();if(!S.res)return;
+  const kind=document.querySelector("input[name=ov]:checked").value,R=S.res,r=R.refRes,p=r.pos[curStep];
+  $("timeLbl").textContent=`${frDate(R.ref)} – ${hm(r.times[curStep])} · soleil ${p.alt.toFixed(0)}° / az ${p.az.toFixed(0)}°`;
+  if(kind==="none")return;
+  let cv;
+  if(kind==="shadow"){const N=R.N*3;const ctx=makeCtx(N);const blocked=p.alt<=horizonAt(p.az);
+    if(blocked){ctx.fillStyle="#0f1937";ctx.fillRect(0,0,N,N);}else drawShadow(ctx,N,R.H,p,R.trees,"#0f1937");cv=ctx.canvas;
+    const d=Math.min(half()*1.2,60)*(90-p.alt)/90+8,[sx,sy]=[d*Math.sin(p.az*RAD),d*Math.cos(p.az*RAD)];
+    L.polyline([toLL(0,0),toLL(sx,sy)],{color:"#ffd23f",weight:2,dashArray:"4 4",interactive:false}).addTo(gSun);
+    L.circleMarker(toLL(sx,sy),{radius:9,color:"#d48a00",fillColor:"#ffd23f",fillOpacity:1,weight:2,interactive:false}).addTo(gSun);
+    overlay=L.imageOverlay(cv.toDataURL(),zoneBounds(),{opacity:.58,interactive:false}).addTo(map);return;}
+  cv=layerCanvas(kind);overlay=L.imageOverlay(cv.toDataURL(),zoneBounds(),{opacity:.72,className:"pix",interactive:false}).addTo(map);
+}
+function drawSunPathOnMap(){gPath.clearLayers();if(S.lat0==null||!$("showPath").checked)return;
+  const R=Math.max(half()*0.9,25),y=+($("date").value||"2027").slice(0,4);
+  const D=[[`${y}-06-21`,"#e8833a","Solstice d'été"],[`${y}-03-20`,"#7fae3f","Équinoxes"],[`${y}-12-21`,"#4c7fd1","Solstice d'hiver"]];
+  for(const [iso,col,lab] of D){const t0=dayStart(iso),pts=[];let rise=null,set=null;
+    for(let m=0;m<1440;m+=5){const p=sunPos(t0+m*6e4,S.lat0,S.lon0);if(p.alt>0){const d=R*(90-p.alt)/90;pts.push(toLL(d*Math.sin(p.az*RAD),d*Math.cos(p.az*RAD)));if(!rise)rise=p;set=p;
+      if(m%60===0)L.circleMarker(pts[pts.length-1],{radius:2.5,color:col,fillOpacity:1,weight:1}).bindTooltip(`${lab} – ${hm(t0+m*6e4)} : h ${p.alt.toFixed(0)}°`).addTo(gPath);}}
+    L.polyline(pts,{color:col,weight:3,opacity:.95}).bindTooltip(lab).addTo(gPath);
+    for(const p of [rise,set])if(p)L.polyline([toLL(0,0),toLL(R*Math.sin(p.az*RAD),R*Math.cos(p.az*RAD))],{color:col,weight:1.5,dashArray:"5 5",interactive:false}).addTo(gPath);}
+  const pr=[];for(let a=0;a<=360;a+=5)pr.push(toLL(R*Math.sin(a*RAD),R*Math.cos(a*RAD)));L.polyline(pr,{color:"#fff",weight:1,opacity:.6,interactive:false}).addTo(gPath);
+}
+
+/* ================= Inspection d'un point ================= */
+function inspect(ll){const R=S.res;const [x,y]=toXY(ll.lat,ll.lng);const N=R.N,H=R.H;
+  const i=Math.floor((x+H)/(2*H)*N),j=Math.floor((H-y)/(2*H)*N);if(i<0||j<0||i>=N||j>=N){$("info").style.display="none";return;}
+  const c=j*N+i;if(R.bmask[c]){$("info").style.display="block";$("info").innerHTML="<b>Emprise bâtie</b>";return;}
+  const r=R.refRes,NN=N*N;let bars="";const w=300/r.steps;
+  for(let s=0;s<r.steps;s++){const v=r.tl[s*NN+c];bars+=`<rect x="${(s*w).toFixed(2)}" y="0" width="${(w+.3).toFixed(2)}" height="18" fill="${v===2?"#f6c945":v===1?"#4a5d7a":"#ddd"}"/>`;}
+  let ticks="";
+  for(let h=3;h<24;h+=3){const t=r.t0+h*36e5,s=(t-r.t0)/(R.DT*6e4);ticks+=`<line x1="${s*w}" y1="18" x2="${s*w}" y2="22" stroke="#666"/><text x="${s*w}" y="32" font-size="9" text-anchor="middle" fill="#666">${h}h</text>`;}
+  const cl=CL[classOf(R.sun[c])];
+  $("info").style.display="block";
+  $("info").innerHTML=`<b>Point cliqué</b> — <span style="background:${cl.col};padding:0 5px;border-radius:3px">${cl.k}</span><br>
+  Soleil direct : <b>${fmtH(R.sun[c])}</b> sur ${fmtH(R.pot)} possibles${R.days.length>1?" (moyenne de la période)":""}<br>
+  Matin : ${fmtH(R.am[c])} · Après-midi : ${fmtH(R.pm[c])}
+  <div style="margin-top:6px">Journée du ${frDate(R.ref)} (heure légale) :</div>
+  <svg viewBox="0 0 300 34" width="100%">${bars}${ticks}</svg>
+  <div class="legend"><span><i style="background:#f6c945"></i>soleil</span><span><i style="background:#4a5d7a"></i>ombre</span><span><i style="background:#ddd"></i>nuit / sous l'horizon</span></div>`;}
+
+/* ================= Diagramme de course du soleil ================= */
+function sunPathSVG(year,refIso){
+  const W=520,cx=W/2,cy=W/2,Rr=210,P=(alt,az)=>{const r=Rr*(90-alt)/90;return [cx+r*Math.sin(az*RAD),cy-r*Math.cos(az*RAD)];};
+  let s=`<svg viewBox="0 0 ${W} ${W}" width="100%" style="max-width:520px;display:block;margin:auto;font-family:system-ui">`;
+  if(S.horizon&&$("useTerrain").checked){let d="";for(let a=0;a<=360;a+=5){const [x,y]=P(Math.max(0,horizonAt(a%360)),a);d+=(a?"L":"M")+x.toFixed(1)+","+y.toFixed(1);}
+    let o="";for(let a=360;a>=0;a-=5){const [x,y]=P(0,a);o+="L"+x.toFixed(1)+","+y.toFixed(1);}s+=`<path d="${d}${o}Z" fill="#8a8f7d" opacity=".45"/>`;}
+  for(const a of [0,15,30,45,60,75]){s+=`<circle cx="${cx}" cy="${cy}" r="${Rr*(90-a)/90}" fill="none" stroke="#ccd" stroke-width="${a?0.7:1.5}"/>`;if(a)s+=`<text x="${cx+3}" y="${cy-Rr*(90-a)/90+11}" font-size="9" fill="#889">${a}°</text>`;}
+  for(let a=0;a<360;a+=30){const [x,y]=P(0,a);s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#dde" stroke-width=".7"/>`;}
+  [["N",0],["E",90],["S",180],["O",270]].forEach(([t,a])=>{const [x,y]=P(-9,a);s+=`<text x="${x}" y="${y+5}" font-size="15" font-weight="700" text-anchor="middle" fill="#334">${t}</text>`;});
+  const D=[[`${year}-06-21`,"#e8833a","21 juin"],[`${year}-03-20`,"#7fae3f","20 mars / 22 sept."],[`${year}-12-21`,"#4c7fd1","21 déc."]];
+  if(refIso&&!D.some(d=>d[0]===refIso))D.push([refIso,"#c0392b",frDate(refIso)]);
+  D.forEach(([iso,col,lab],k)=>{const t0=dayStart(iso);let d="";for(let m=0;m<=1440;m+=4){const p=sunPos(t0+m*6e4,S.lat0,S.lon0);if(p.alt<=0)continue;const [x,y]=P(p.alt,p.az);d+=(d?"L":"M")+x.toFixed(1)+","+y.toFixed(1);}
+    s+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2.6"/>`;
+    for(let h=0;h<24;h++){const t=t0+h*36e5,p=sunPos(t,S.lat0,S.lon0);if(p.alt<=1)continue;const [x,y]=P(p.alt,p.az);s+=`<circle cx="${x}" cy="${y}" r="3" fill="${col}"/>`;if(k===0||k===2)s+=`<text x="${x}" y="${y+(k===0?-6:13)}" font-size="9.5" text-anchor="middle" fill="${col}">${h}h</text>`;}
+    s+=`<rect x="8" y="${10+k*18}" width="14" height="4" fill="${col}"/><text x="27" y="${16+k*18}" font-size="11" fill="#333">${lab}</text>`;});
+  if(S.horizon&&$("useTerrain").checked)s+=`<rect x="8" y="${10+D.length*18-3}" width="14" height="9" fill="#8a8f7d" opacity=".45"/><text x="27" y="${16+D.length*18}" font-size="11" fill="#333">masque du relief</text>`;
+  return s+"</svg>";}
+function dayStats(iso){const t0=dayStart(iso);let rise=null,set=null,maxA=-90,noon=null,eff=0,azr=null,azs=null;
+  for(let m=0;m<1440;m++){const t=t0+m*6e4,p=sunPos(t,S.lat0,S.lon0);if(p.alt>-0.3){if(rise==null){rise=t;azr=p.az;}set=t;azs=p.az;}if(p.alt>maxA){maxA=p.alt;noon=t;}if(p.alt>0&&p.alt>horizonAt(p.az))eff++;}
+  return {rise,set,maxA,noon,eff,azr,azs,len:set&&rise?(set-rise)/6e4:0};}
+
+/* ================= Plans schématiques ================= */
+function planCanvas(px,fillFn){const R=S.res,H=R.H,c=document.createElement("canvas");c.width=c.height=px;const ctx=c.getContext("2d");
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,px,px);fillFn(ctx,px);
+  setT(ctx,px,H);ctx.lineWidth=2*H/px;
+  ctx.fillStyle="rgba(120,170,110,.18)";for(const v of S.veg){ctx.beginPath();pathPrism(ctx,v.ring,0,0,0);ctx.fill();}
+  ctx.fillStyle="#c9c5bd";ctx.strokeStyle="#5d5a54";for(const b of S.buildings){ctx.beginPath();pathPrism(ctx,b.ring,0,0,0);ctx.fill();ctx.stroke();}
+  ctx.strokeStyle="#2e7d3b";ctx.lineWidth=1.6*H/px;for(const t of R.trees){if(Math.abs(t.x)>H+t.r||Math.abs(t.y)>H+t.r)continue;ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.stroke();ctx.beginPath();ctx.arc(t.x,t.y,0.25,0,7);ctx.fillStyle="#2e7d3b";ctx.fill();}
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.font=`${Math.round(px/48)}px system-ui`;ctx.fillStyle="#333";ctx.textAlign="center";
+  for(const b of S.buildings){let cx=0,cy=0;b.ring.forEach(p=>{cx+=p[0];cy+=p[1];});cx/=b.ring.length;cy/=b.ring.length;if(Math.abs(cx)<H*0.92&&Math.abs(cy)<H*0.92){const X=(cx+H)/(2*H)*px,Y=(H-cy)/(2*H)*px;ctx.fillText(bH(b).toFixed(0)+" m",X,Y+4);}}
+  // flèche du nord + échelle
+  const a=px*0.06;ctx.fillStyle="#222";ctx.beginPath();ctx.moveTo(px-a,a*0.5);ctx.lineTo(px-a-a*0.3,a*1.3);ctx.lineTo(px-a,a*1.1);ctx.lineTo(px-a+a*0.3,a*1.3);ctx.closePath();ctx.fill();
+  ctx.font=`bold ${Math.round(px/36)}px system-ui`;ctx.fillText("N",px-a,a*1.75);
+  const sc=[5,10,20,25,50][[40,60,80,120,160].indexOf(2*H)]||10,L_=sc/(2*H)*px;
+  ctx.fillStyle="rgba(255,255,255,.85)";ctx.fillRect(8,px-30,L_+50,24);ctx.fillStyle="#222";ctx.fillRect(14,px-16,L_,4);ctx.textAlign="left";ctx.font=`${Math.round(px/45)}px system-ui`;ctx.fillText(sc+" m",20+L_,px-11);
+  ctx.strokeStyle="#333";ctx.lineWidth=1;ctx.strokeRect(.5,.5,px-1,px-1);return c;}
+function blitCells(ctx,px,src){ctx.imageSmoothingEnabled=false;ctx.drawImage(src,0,0,px,px);}
+
+/* ================= Rapport ================= */
+function buildReport(){
+  const R=S.res,r=R.refRes,year=R.ref.slice(0,4),NN=R.N*R.N,rep=$("report");
+  const seasons=[[`${year}-03-20`,"Équinoxe de printemps"],[`${year}-06-21`,"Solstice d'été"],[`${year}-09-22`,"Équinoxe d'automne"],[`${year}-12-21`,"Solstice d'hiver"]];
+  let rows="";for(const [iso,lab] of seasons){const d=dayStats(iso);rows+=`<tr><td><b>${lab}</b><br><span class="meta">${frDate(iso)}</span></td><td>${hm(d.rise)} <span class="meta">(az ${d.azr.toFixed(0)}°)</span></td><td>${hm(d.set)} <span class="meta">(az ${d.azs.toFixed(0)}°)</span></td><td>${fmtH(d.len)}</td><td>${hm(d.noon)}</td><td>${d.maxA.toFixed(1)}°</td><td>${fmtH(d.eff)}</td></tr>`;}
+  // stats par classe
+  const cnt=[0,0,0,0],amS=[0,0,0,0],pmS=[0,0,0,0];let free=0;
+  for(let c=0;c<NN;c++){if(R.bmask[c])continue;free++;const k=classOf(R.sun[c]);cnt[k]++;amS[k]+=R.am[c];pmS[k]+=R.pm[c];}
+  const cellA=(2*R.H/R.N)**2;
+  let crow="";CL.forEach((k,i)=>{if(!cnt[i]){crow+=`<tr><td><i style="display:inline-block;width:12px;height:12px;background:${k.col};border-radius:2px"></i> ${k.k}</td><td>${k.d}</td><td>0 %</td><td>–</td><td>–</td></tr>`;return;}
+    const a=amS[i]/cnt[i],p=pmS[i]/cnt[i];crow+=`<tr><td><i style="display:inline-block;width:12px;height:12px;background:${k.col};border-radius:2px"></i> <b>${k.k}</b></td><td>${k.d}</td><td>${(100*cnt[i]/free).toFixed(0)} % <span class="meta">(${Math.round(cnt[i]*cellA)} m²)</span></td><td>${fmtH(a)}</td><td>${fmtH(p)}</td></tr>`;});
+  const period=R.days.length>1?`du ${frDate(R.days[0])} au ${frDate(R.days[R.days.length-1])} (moyenne de ${R.days.length} jours échantillonnés)`:`le ${frDate(R.ref)}`;
+  const nDef=S.buildings.filter(b=>b.src==="défaut").length;
+  rep.innerHTML=`
+  <h2>${$("proj").value?esc($("proj").value)+" — ":""}Étude d'ensoleillement</h2>
+  <div class="meta">${esc(S.addr)} · ${S.lat0.toFixed(5)}°N, ${S.lon0.toFixed(5)}°E${S.z0!=null?" · altitude ≈ "+Math.round(S.z0)+" m":""} · zone d'étude ${2*R.H} × ${2*R.H} m · heures légales (${TZ})</div>
+  <h3>1. Course du soleil selon les saisons</h3>
+  <div class="plans"><div>${sunPathSVG(year,R.ref)}<p class="note">Diagramme vu du ciel : le centre est le zénith, le cercle extérieur l'horizon. Chaque point marque une heure pleine (heure légale).</p></div>
+  <div><table><tr><th>Date</th><th>Lever</th><th>Coucher</th><th>Durée du jour</th><th>Midi solaire</th><th>Hauteur max.</th><th>Soleil hors relief</th></tr>${rows}</table>
+  <p class="note">« Soleil hors relief » : durée pendant laquelle le soleil est au-dessus du relief environnant (collines, vallée), avant prise en compte des bâtiments et arbres. Azimuts comptés depuis le nord (90° = est, 180° = sud, 270° = ouest).</p></div></div>
+  <h3>2. Ombres portées heure par heure — ${period.startsWith("le")?frDate(R.ref):"journée type du "+frDate(R.ref)}</h3>
+  <div class="grid" id="snaps"></div>
+  <h3>3. Zones d'exposition — ${period}</h3>
+  <div class="plans"><div class="plan" id="pClass"></div><div class="plan" id="pHours"></div></div>
+  <table style="margin-top:10px"><tr><th>Zone</th><th>Soleil direct par jour</th><th>Part de la surface libre</th><th>Soleil du matin (moy.)</th><th>Soleil d'après-midi (moy.)</th></tr>${crow}</table>
+  <p class="note">Soleil possible ce jour (sans obstacle proche) : ${fmtH(R.pot)}. Une mi-ombre ensoleillée surtout le matin convient aux plantes de mi-ombre fraîche (hortensias, fougères…) ; une mi-ombre d'après-midi est plus chaude et sèche.</p>
+  <h3>4. Soleil du matin ou de l'après-midi</h3>
+  <div class="plans"><div class="plan" id="pAmpm"></div><div class="note" style="align-self:center">
+  <div class="legend"><span><i style="background:rgb(76,155,232)"></i>surtout le matin</span><span><i style="background:rgb(235,230,215)"></i>équilibré</span><span><i style="background:rgb(232,131,58)"></i>surtout l'après-midi</span><span><i style="background:#5a5a5a"></i>moins d'1 h de soleil</span></div>
+  Répartition du soleil direct de part et d'autre du midi solaire (${hm(r.noon)}). Le soleil d'après-midi, plus chaud, aggrave le stress hydrique ; le soleil du matin est plus doux.</div></div>
+  <h3>Hypothèses et limites</h3>
+  <ul class="note">
+   <li>Ensoleillement <b>potentiel par ciel clair</b> (nuages non pris en compte), calculé toutes les ${R.DT} min sur une grille de ${(2*R.H/R.N).toFixed(2)} m.</li>
+   <li>Terrain considéré plat à l'échelle de la parcelle ; le relief lointain n'intervient que comme masque d'horizon.</li>
+   <li>Bâtiments modélisés en volumes à toit plat. ${nDef?`<b>${nDef} bâtiment(s) sans hauteur connue</b> ont reçu ${$("hdef").value} m par défaut (contour orange sur la carte) : à vérifier.`:"Toutes les hauteurs proviennent des données ou d'une saisie."}</li>
+   <li>Arbres modélisés comme des couronnes opaques (cylindre entre 30 % et 100 % de leur hauteur) ; en réalité un feuillage léger laisse passer une partie de la lumière. Les arbres absents d'OpenStreetMap doivent être ajoutés à la main.</li>
+   <li>Sources : ${S.sources.map(esc).join(" ; ")||"—"} ; position du soleil : algorithme astronomique (précision ≈ 0,1°).</li>
+  </ul>
+  <p class="meta">Généré le ${new Date().toLocaleDateString("fr-FR")} avec le Simulateur d'ombre.</p>`;
+  // instantanés horaires
+  const snaps=$("snaps"),px=300,ctxS=makeCtx(R.N*3);
+  for(let h=5;h<=22;h++){const t=r.t0+h*36e5,p=sunPos(t,S.lat0,S.lon0);if(p.alt<=2)continue;
+    const blocked=p.alt<=horizonAt(p.az);
+    if(!blocked)drawShadow(ctxS,R.N*3,R.H,p,R.trees,"#19305f");
+    const cv=planCanvas(px,(ctx,P)=>{ctx.globalAlpha=.55;if(blocked){ctx.fillStyle="#19305f";ctx.fillRect(0,0,P,P);}else ctx.drawImage(ctxS.canvas,0,0,P,P);ctx.globalAlpha=1;});
+    const f=document.createElement("figure");f.appendChild(cv);const fc=document.createElement("figcaption");
+    fc.innerHTML=`<b>${hm(t)}</b> · hauteur ${p.alt.toFixed(0)}° · azimut ${p.az.toFixed(0)}°${blocked?" · <i>derrière le relief</i>":""}`;f.appendChild(fc);snaps.appendChild(f);}
+  const big=640;
+  const pc=planCanvas(big,(ctx,P)=>blitCells(ctx,P,layerCanvas("class")));
+  $("pClass").append(pc);$("pClass").insertAdjacentHTML("beforeend",`<div class="legend">${CL.map(k=>`<span><i style="background:${k.col}"></i>${k.k} (${k.d})</span>`).join("")}</div>`);
+  const ph=planCanvas(big,(ctx,P)=>blitCells(ctx,P,layerCanvas("hours")));
+  $("pHours").append(ph);
+  const mx=R.pot,lg=[0,.25,.5,.75,1].map(f=>`<span><i style="background:rgb(${ramp(f).join(",")})"></i>${fmtH(mx*f)}</span>`).join("");
+  $("pHours").insertAdjacentHTML("beforeend",`<div class="legend">Heures de soleil direct : ${lg}</div>`);
+  $("pAmpm").append(planCanvas(big,(ctx,P)=>blitCells(ctx,P,layerCanvas("ampm"))));
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+$("btnPrint").onclick=()=>window.print();
+</script>
+</body>
+</html>
