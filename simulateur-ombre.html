@@ -185,7 +185,10 @@ html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
   <fieldset><legend>4. Compléter le site</legend>
     <button id="btnTree" class="sec" style="width:100%">＋ Ajouter des arbres (clic sur la carte)</button>
     <div class="row"><div><label>Hauteur arbre (m)</label><input id="th" type="number" value="8" min="1" max="40" step="0.5"></div><div><label>Ø couronne (m)</label><input id="td" type="number" value="6" min="0.5" max="30" step="0.5"></div></div>
-    <div class="hint">Cliquez un bâtiment pour corriger sa hauteur ; cliquez un arbre ajouté pour le supprimer. Relancez ensuite l'analyse.</div>
+    <button id="btnHedge" class="sec" style="width:100%;margin-top:10px">＋ Tracer une haie</button>
+    <div class="row"><div><label>Hauteur haie (m)</label><input id="hh" type="number" value="2" min="0.3" max="15" step="0.1"></div><div><label>Épaisseur (m)</label><input id="hw" type="number" value="1" min="0.2" max="6" step="0.1"></div></div>
+    <button id="btnHedgeEnd" style="width:100%;margin-top:6px" disabled>Terminer la haie</button>
+    <div class="hint">Haie : touchez son point de départ, puis chaque changement de direction, puis « Terminer la haie ». Touchez un arbre ou une haie ajoutés pour les supprimer ; touchez un bâtiment pour corriger sa hauteur. Relancez ensuite l'analyse.</div>
   </fieldset>
   <fieldset><legend>5. Votre plan (facultatif)</legend>
     <input id="planFile" type="file" accept="image/*,application/pdf,.pdf" style="width:100%">
@@ -273,10 +276,11 @@ const map=L.map("map",{zoomControl:true,tap:false}).setView([46.6,2.4],6);
 const ign=(layer,fmt,style)=>L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=${encodeURIComponent(style||"normal")}&TILEMATRIXSET=PM&FORMAT=${fmt}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,{maxNativeZoom:19,maxZoom:22,attribution:"© IGN Géoplateforme"});
 const baseOrtho=ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg");
 const basePlan=ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png");
-const baseCarto=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",{maxNativeZoom:19,maxZoom:22,attribution:"© OpenStreetMap, © CARTO"});
+const osmFR=()=>L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",{subdomains:"abc",maxNativeZoom:20,maxZoom:22,attribution:"© contributeurs OpenStreetMap, tuiles OSM France"});
+const baseCarto=osmFR();
 baseOrtho.addTo(map);
 const cadastre=()=>ign("CADASTRALPARCELS.PARCELLAIRE_EXPRESS","image/png","PCI vecteur");
-L.control.layers({"Photo aérienne (IGN)":baseOrtho,"Plan IGN":basePlan,"Plan clair (OSM)":baseCarto},{"Cadastre":cadastre()},{position:"topright"}).addTo(map);
+L.control.layers({"Photo aérienne (IGN)":baseOrtho,"Plan IGN":basePlan,"Plan OpenStreetMap":baseCarto},{"Cadastre":cadastre()},{position:"topright"}).addTo(map);
 L.control.scale({imperial:false}).addTo(map);
 map.createPane("obst").style.zIndex=405;map.createPane("planov").style.zIndex=350;
 const gParcel=L.layerGroup().addTo(map);
@@ -310,13 +314,25 @@ async function geocode(){
 $("btnGeo").onclick=geocode;$("addr").onkeydown=e=>{if(e.key==="Enter")geocode();};
 
 /* ================= Arbres ajoutés / édition ================= */
-let mode=null,parcelDraft=[];
-function setMode(m){mode=m;const t=mode==="tree",pc=mode==="parcel";
+let mode=null,parcelDraft=[],hedgeDraft=[];S.userHedges=[];
+function setMode(m){if(mode==="hedge"&&m!=="hedge"&&hedgeDraft.length){hedgeDraft=[];drawUserTrees();}
+  mode=m;const t=mode==="tree",pc=mode==="parcel",hg=mode==="hedge";
+  $("btnHedge").classList.toggle("on",hg);$("btnHedge").textContent=hg?"✓ Touchez les points de la haie… (toucher ici pour annuler)":"＋ Tracer une haie";$("btnHedgeEnd").disabled=!hg;
   $("btnTree").classList.toggle("on",t);$("btnTree").textContent=t?"✓ Mode ajout actif (toucher pour arrêter)":"＋ Ajouter des arbres (clic sur la carte)";
   $("btnParcel").classList.toggle("on",pc);$("btnParcel").textContent=pc?"✓ Touchez les angles du jardin…":"✎ Dessiner le contour du jardin";
   $("btnParcelEnd").disabled=!pc;$("btnParcelClr").disabled=!(pc||S.parcel);
   map.getContainer().classList.toggle("drawing",!!mode);map.getContainer().style.cursor=mode?"crosshair":"";}
 $("btnTree").onclick=()=>setMode(mode==="tree"?null:"tree");
+$("btnHedge").onclick=()=>{if(mode==="hedge"){setMode(null);return;}hedgeDraft=[];setMode("hedge");};
+$("btnHedgeEnd").onclick=()=>{if(hedgeDraft.length<2){log("Une haie demande au moins 2 points.");return;}
+  S.userHedges.push({pts:hedgeDraft.slice(),h:+$("hh").value,w:+$("hw").value});hedgeDraft=[];setMode(null);drawUserTrees();
+  const hd=S.userHedges[S.userHedges.length-1];log(`Haie ajoutée : ${hedgeLen(hd).toFixed(1)} m, h ${hd.h} m, épaisseur ${hd.w} m.`);};
+function hedgeRects(hd){const P=hd.pts.map(p=>toXY(p[0],p[1])),w=hd.w/2,out=[];
+  for(let i=0;i<P.length-1;i++){const [x1,y1]=P[i],[x2,y2]=P[i+1],L_=Math.hypot(x2-x1,y2-y1);if(L_<0.01)continue;
+    const dx=(x2-x1)/L_,dy=(y2-y1)/L_,nx=-dy*w,ny=dx*w,ax=x1-dx*w,ay=y1-dy*w,bx=x2+dx*w,by=y2+dy*w;
+    out.push(ccw([[ax+nx,ay+ny],[ax-nx,ay-ny],[bx-nx,by-ny],[bx+nx,by+ny]]));}
+  return out;}
+function hedgeLen(hd){let s=0;const P=hd.pts.map(p=>toXY(p[0],p[1]));for(let i=1;i<P.length;i++)s+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);return s;}
 $("btnParcel").onclick=()=>{if(mode==="parcel"){finishParcel();return;}parcelDraft=[];setMode("parcel");drawParcel();};
 $("btnParcelEnd").onclick=()=>finishParcel();
 $("btnParcelClr").onclick=()=>{S.parcel=null;parcelDraft=[];if(mode==="parcel")setMode(null);drawParcel();setMode(mode);
@@ -336,12 +352,18 @@ function finishParcel(){if(parcelDraft.length<3){log("Le contour doit avoir au m
   log(`Contour enregistré (${S.parcel.length} points) – zone d'étude ${side} × ${side} m.`);}
 map.on("click",e=>{
   if(mode==="parcel"){parcelDraft.push([e.latlng.lat,e.latlng.lng]);drawParcel();return;}
+  if(mode==="hedge"){if(S.lat0==null)setOrigin(e.latlng.lat,e.latlng.lng);hedgeDraft.push([e.latlng.lat,e.latlng.lng]);drawUserTrees();return;}
   if(mode==="tree"){S.userTrees.push({lat:e.latlng.lat,lon:e.latlng.lng,h:+$("th").value,r:+$("td").value/2});drawUserTrees();return;}
   if(S.lat0==null)setCenter(e.latlng.lat,e.latlng.lng,null);
   else if(S.res)inspect(e.latlng);
 });
 function drawUserTrees(){gUser.clearLayers();S.userTrees.forEach((t,i)=>{L.circle([t.lat,t.lon],{radius:t.r,color:"#1d7a2e",weight:2,fillColor:"#3fbf55",fillOpacity:.35})
-  .bindPopup(`<b>Arbre ajouté</b><br>h ${t.h} m – Ø ${2*t.r} m<br><button onclick="delTree(${i})">Supprimer</button>`).addTo(gUser);});}
+  .bindPopup(`<b>Arbre ajouté</b><br>h ${t.h} m – Ø ${2*t.r} m<br><button onclick="delTree(${i})">Supprimer</button>`).addTo(gUser);});
+  S.userHedges.forEach((hd,i)=>{const pop=`<b>Haie ajoutée</b><br>${hedgeLen(hd).toFixed(1)} m · h ${hd.h} m · épaisseur ${hd.w} m<br><button onclick="delHedge(${i})">Supprimer</button>`;
+    hedgeRects(hd).forEach(r=>L.polygon(r.map(q=>toLL(q[0],q[1])),{color:"#1d7a2e",weight:1.5,fillColor:"#3fbf55",fillOpacity:.55}).bindPopup(pop).addTo(gUser));});
+  if(hedgeDraft.length){L.polyline(hedgeDraft,{color:"#3fbf55",weight:4,dashArray:"6 5",interactive:false}).addTo(gUser);
+    hedgeDraft.forEach(p=>L.circleMarker(p,{radius:5,color:"#000",weight:1,fillColor:"#3fbf55",fillOpacity:1,interactive:false}).addTo(gUser));}}
+window.delHedge=i=>{S.userHedges.splice(i,1);map.closePopup();drawUserTrees();};
 window.delTree=i=>{S.userTrees.splice(i,1);map.closePopup();drawUserTrees();};
 window.setH=id=>{const v=parseFloat(document.getElementById("hin_"+id).value);if(v>0){S.hEdits[id]=v;const b=S.buildings.find(x=>x.id===id);if(b){b.h=v;b.src="saisie";}map.closePopup();drawObstacles();log("Hauteur modifiée : "+v+" m – relancez l'analyse.");}};
 
@@ -452,6 +474,7 @@ function drawShadow(ctx,N,H,sun,trees,color){
   ctx.fillStyle=color;ctx.strokeStyle=color;ctx.beginPath();
   for(const b of S.buildings)pathPrism(ctx,b.ring,bH(b),ux,uy);
   for(const v of S.veg)pathPrism(ctx,v.ring,v.h,ux,uy);
+  for(const hd of S.userHedges)for(const r of hedgeRects(hd))pathPrism(ctx,r,hd.h,ux,uy);
   ctx.fill("nonzero");
   ctx.lineCap="round";
   for(const t of trees){ctx.beginPath();ctx.lineWidth=2*t.r;const x1=t.x+ux*t.hb,y1=t.y+uy*t.hb,x2=t.x+ux*t.h,y2=t.y+uy*t.h;ctx.moveTo(x1,y1);ctx.lineTo(x2+1e-3,y2);ctx.stroke();}
@@ -591,6 +614,7 @@ function planCanvas(px,fillFn,opt){opt=opt||{};const R=S.res,H=opt.H||R.H,c=docu
   setT(ctx,px,H);ctx.lineWidth=2*H/px;
   ctx.fillStyle="rgba(120,170,110,.18)";for(const v of S.veg){ctx.beginPath();pathPrism(ctx,v.ring,0,0,0);ctx.fill();}
   ctx.fillStyle="#c9c5bd";ctx.strokeStyle="#5d5a54";for(const b of S.buildings){ctx.beginPath();pathPrism(ctx,b.ring,0,0,0);ctx.fill();ctx.stroke();}
+  ctx.fillStyle="rgba(63,160,85,.75)";ctx.strokeStyle="#1d5e2b";ctx.lineWidth=1.2*H/px;for(const hd of S.userHedges)for(const r of hedgeRects(hd)){ctx.beginPath();pathPrism(ctx,r,0,0,0);ctx.fill();ctx.stroke();}
   ctx.strokeStyle="#2e7d3b";ctx.lineWidth=1.6*H/px;for(const t of R.trees){if(Math.abs(t.x)>H+t.r||Math.abs(t.y)>H+t.r)continue;ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.stroke();ctx.beginPath();ctx.arc(t.x,t.y,0.25,0,7);ctx.fillStyle="#2e7d3b";ctx.fill();}
   if(R.parcelXY){ctx.strokeStyle="#b03a2e";ctx.lineWidth=3*H/px;ctx.beginPath();pathPrism(ctx,R.parcelXY,0,0,0);ctx.stroke();}
   ctx.setTransform(1,0,0,1,0,0);
@@ -643,7 +667,7 @@ function buildReport(){
    ${R.pmask?"<li>Les surfaces et pourcentages portent sur le contour du jardin dessiné (hors emprise des bâtiments) ; les ombres tiennent compte de tous les bâtiments et arbres alentour.</li>":""}
    <li>Terrain considéré plat à l'échelle de la parcelle ; le relief lointain n'intervient que comme masque d'horizon.</li>
    <li>Bâtiments modélisés en volumes à toit plat. ${nDef?`<b>${nDef} bâtiment(s) sans hauteur connue</b> ont reçu ${$("hdef").value} m par défaut (contour orange sur la carte) : à vérifier.`:"Toutes les hauteurs proviennent des données ou d'une saisie."}</li>
-   <li>Arbres modélisés comme des couronnes opaques (cylindre entre 30 % et 100 % de leur hauteur) ; en réalité un feuillage léger laisse passer une partie de la lumière. Les arbres absents d'OpenStreetMap doivent être ajoutés à la main.</li>
+   <li>Arbres modélisés comme des couronnes opaques (cylindre entre 30 % et 100 % de leur hauteur) ; en réalité un feuillage léger laisse passer une partie de la lumière. Les arbres absents d'OpenStreetMap doivent être ajoutés à la main.${S.userHedges.length?` Haies ajoutées (${S.userHedges.length}) modélisées comme des volumes végétaux opaques de la hauteur et de l'épaisseur saisies.`:""}</li>
    <li>Sources : ${S.sources.map(esc).join(" ; ")||"—"} ; position du soleil : algorithme astronomique (précision ≈ 0,1°).</li>
   </ul>
   <p class="meta">Généré le ${new Date().toLocaleDateString("fr-FR")} avec le Simulateur d'ombre.</p>`;
@@ -702,7 +726,7 @@ const AffineImage=L.Layer.extend({
 let calPhase="pts",adjLayer=null,dragOn=false,dragSt=null,wBase=[];
 const BASES={ortho:()=>[ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg")],orthocad:()=>[ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg"),cadastre()],
   cad:()=>[cadastre()],plan:()=>[ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png")],
-  osm:()=>[L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",{maxNativeZoom:19,maxZoom:22})]};
+  osm:()=>[osmFR()]};
 function setBase(v){wBase.forEach(l=>wmap.removeLayer(l));wBase=(BASES[v]||BASES.ortho)();wBase.forEach(l=>l.addTo(wmap));}
 $("calBase").onchange=e=>setBase(e.target.value);
 function openCalib(){if(!CP.img)return;$("calib").style.display="flex";
