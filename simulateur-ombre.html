@@ -119,7 +119,17 @@ figcaption{font-size:11.5px;color:var(--mute);text-align:center;margin-top:2px}
 .hint{font-size:12px;color:var(--mute);margin-top:4px}
 .empty{color:var(--mute);font-style:italic}
 .drawing .leaflet-obst-pane path{pointer-events:none!important}
-.leaflet-planov-pane{mix-blend-mode:multiply}
+.leaflet-planov-pane,.leaflet-adj-pane{mix-blend-mode:multiply}
+#finePanel{position:absolute;z-index:1002;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(255,255,255,.96);border-radius:10px;padding:8px 10px;box-shadow:0 2px 12px #0006;display:none;font-size:13px;width:max-content;max-width:96%}
+.fp-row{display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap}.fp-row>span{min-width:64px;color:#555}
+.fp-row button{min-width:44px;padding:8px 10px;font-size:17px;line-height:1}.fp-row select{width:auto;padding:6px}
+#fDrag{font-size:14px}
+.xhair{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;z-index:1001;pointer-events:none;display:none}
+.xhair::before,.xhair::after{content:"";position:absolute;background:#ff2d55;box-shadow:0 0 0 1px #fff}
+.xhair::before{left:16px;top:0;width:2px;height:34px}.xhair::after{top:16px;left:0;height:2px;width:34px}
+#calib.fine #pbox{display:none}#calib.fine .cmaps{grid-template-columns:1fr;grid-template-rows:1fr}
+#calib.fine #finePanel,#calib.fine .xhair{display:block}
+#calBase{width:auto}
 #calib{position:fixed;inset:0;background:#fff;z-index:5000;display:none;flex-direction:column}
 #calib .ctop{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 #calStep{flex:1;min-width:220px;font-weight:600;color:#7a3e00}
@@ -184,7 +194,8 @@ html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
     <label>Transparence du plan sur la carte</label><input id="planOp" type="range" min="0" max="1" step="0.05" value="0.8" style="width:100%" disabled>
   </fieldset>
   <button id="btnRun" style="width:100%;padding:10px" disabled>Analyser le site</button>
-  <button id="btnPrint" class="sec" style="width:100%;margin-top:6px" disabled>Imprimer / enregistrer le rapport en PDF</button>
+  <button id="btnPdf" style="width:100%;margin-top:6px;background:#c7792b;border-color:#c7792b" disabled>Exporter le rapport en PDF</button>
+  <button id="btnPrint" class="sec" style="width:100%;margin-top:6px" disabled>Imprimer (navigateur)</button>
   <div id="log"></div>
   <div id="info"></div>
 </aside>
@@ -208,8 +219,17 @@ html,body{overflow-x:hidden;-webkit-text-size-adjust:100%}
 
 <div id="calib">
   <div class="ctop"><span id="calStep">—</span>
-    <button id="calReset" class="sec">Recommencer</button><button id="calCancel" class="sec">Annuler</button><button id="calOk" disabled>Valider le calage</button></div>
-  <div class="cmaps"><div><div id="pmap" style="position:absolute;inset:0"></div><span class="cl">Votre plan</span></div><div><div id="wmap" style="position:absolute;inset:0"></div><span class="cl">Photo aérienne</span></div></div>
+    <select id="calBase" title="Fond de référence"><option value="ortho">Fond : photo aérienne</option><option value="orthocad">Fond : photo + cadastre</option><option value="cad">Fond : cadastre</option><option value="plan">Fond : plan IGN</option><option value="osm">Fond : plan OSM</option></select>
+    <button id="calReset" class="sec">Recommencer</button><button id="calFine" class="sec" disabled>Ajustement fin ›</button><button id="calCancel" class="sec">Annuler</button><button id="calOk" disabled>Valider le calage</button></div>
+  <div class="cmaps"><div id="pbox"><div id="pmap" style="position:absolute;inset:0"></div><span class="cl">Votre plan</span></div>
+   <div><div id="wmap" style="position:absolute;inset:0;background:#fff"></div><span class="cl">Référence</span><div class="xhair"></div>
+    <div id="finePanel">
+     <div class="fp-row"><button id="fDrag" class="sec">✋ Glisser le plan</button><span style="min-width:0">Transparence</span><input id="fOp" type="range" min="0.1" max="1" step="0.05" value="0.6"></div>
+     <div class="fp-row"><span>Déplacer</span><button data-mv="-1,0">←</button><button data-mv="0,1">↑</button><button data-mv="0,-1">↓</button><button data-mv="1,0">→</button><select id="fStepM"><option value="0.05">5 cm</option><option value="0.2" selected>20 cm</option><option value="1">1 m</option></select></div>
+     <div class="fp-row"><span>Tourner</span><button data-rot="1">↺</button><button data-rot="-1">↻</button><select id="fStepA"><option value="0.1">0,1°</option><option value="0.5" selected>0,5°</option><option value="2">2°</option></select></div>
+     <div class="fp-row"><span>Échelle</span><button data-sc="-1">−</button><button data-sc="1">+</button><select id="fStepS"><option value="0.001">0,1 %</option><option value="0.005" selected>0,5 %</option><option value="0.02">2 %</option></select></div>
+     <div class="hint" id="fInfo"></div>
+    </div></div></div>
 </div>
 <script>
 "use strict";
@@ -250,12 +270,13 @@ function log(t){$("log").textContent+=t+"\n";$("log").scrollTop=1e9;}
 /* ================= Carte ================= */
 if(typeof L==="undefined"){document.getElementById("map").innerHTML="<div style='padding:30px;text-align:center;color:#555'>La carte n'a pas pu se charger.<br>Ouvrez ce fichier dans Safari, Chrome ou Firefox avec une connexion Internet (pas dans un aperçu de fichier).</div>";throw new Error("Leaflet indisponible");}
 const map=L.map("map",{zoomControl:true,tap:false}).setView([46.6,2.4],6);
-const ign=(layer,fmt)=>L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=normal&TILEMATRIXSET=PM&FORMAT=${fmt}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,{maxNativeZoom:19,maxZoom:22,attribution:"© IGN Géoplateforme"});
+const ign=(layer,fmt,style)=>L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=${encodeURIComponent(style||"normal")}&TILEMATRIXSET=PM&FORMAT=${fmt}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,{maxNativeZoom:19,maxZoom:22,attribution:"© IGN Géoplateforme"});
 const baseOrtho=ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg");
 const basePlan=ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png");
 const baseCarto=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",{maxNativeZoom:19,maxZoom:22,attribution:"© OpenStreetMap, © CARTO"});
 baseOrtho.addTo(map);
-L.control.layers({"Photo aérienne (IGN)":baseOrtho,"Plan IGN":basePlan,"Plan clair (OSM)":baseCarto},{},{position:"topright"}).addTo(map);
+const cadastre=()=>ign("CADASTRALPARCELS.PARCELLAIRE_EXPRESS","image/png","PCI vecteur");
+L.control.layers({"Photo aérienne (IGN)":baseOrtho,"Plan IGN":basePlan,"Plan clair (OSM)":baseCarto},{"Cadastre":cadastre()},{position:"topright"}).addTo(map);
 L.control.scale({imperial:false}).addTo(map);
 map.createPane("obst").style.zIndex=405;map.createPane("planov").style.zIndex=350;
 const gParcel=L.layerGroup().addTo(map);
@@ -475,7 +496,7 @@ $("btnRun").onclick=async()=>{
       const d=cx.getImageData(0,0,N,N).data;pmask=new Uint8Array(NN);for(let i=0;i<NN;i++)pmask[i]=d[4*i+3]>127?1:0;}
     S.res={N,H,DT,days,ref,sun,am,pm,pot,bmask,pmask,parcelXY,refRes,trees:allTrees()};
     log("Analyse terminée.");
-    setupSlider();buildReport();setOverlay();$("btnPrint").disabled=false;
+    setupSlider();buildReport();setOverlay();$("btnPrint").disabled=false;$("btnPdf").disabled=false;
   }catch(e){console.error(e);log("Erreur : "+e.message);}
   $("btnRun").disabled=false;
 };
@@ -587,7 +608,7 @@ function blitCells(ctx,px,src){ctx.imageSmoothingEnabled=false;ctx.drawImage(src
 
 /* ================= Rapport ================= */
 function buildReport(){
-  const R=S.res,r=R.refRes,year=R.ref.slice(0,4),NN=R.N*R.N,rep=$("report");
+  resetPdf();const R=S.res,r=R.refRes,year=R.ref.slice(0,4),NN=R.N*R.N,rep=$("report");
   const seasons=[[`${year}-03-20`,"Équinoxe de printemps"],[`${year}-06-21`,"Solstice d'été"],[`${year}-09-22`,"Équinoxe d'automne"],[`${year}-12-21`,"Solstice d'hiver"]];
   let rows="";for(const [iso,lab] of seasons){const d=dayStats(iso);rows+=`<tr><td><b>${lab}</b><br><span class="meta">${frDate(iso)}</span></td><td>${hm(d.rise)} <span class="meta">(az ${d.azr.toFixed(0)}°)</span></td><td>${hm(d.set)} <span class="meta">(az ${d.azs.toFixed(0)}°)</span></td><td>${fmtH(d.len)}</td><td>${hm(d.noon)}</td><td>${d.maxA.toFixed(1)}°</td><td>${fmtH(d.eff)}</td></tr>`;}
   // stats par classe
@@ -645,7 +666,7 @@ function buildReport(){
   buildClientPlan(period);
 }
 /* ================= Plan du client : chargement, calage, rendu ================= */
-const CP={img:null,name:"",pts:[null,null,null,null],ok:false};
+const CP={img:null,src:"",name:"",pts:[null,null,null,null],anchor:null,ok:false};
 let pmap=null,wmap=null,pImg=null,cMarks=[],planOv=null;
 function planInfo(t){$("planInfo").textContent=t;}
 function loadScript(src){return new Promise((ok,ko)=>{const s=document.createElement("script");s.src=src;s.onload=ok;s.onerror=()=>ko(new Error("lecteur PDF indisponible (connexion ?)"));document.head.appendChild(s);});}
@@ -661,50 +682,99 @@ async function pdfToCanvas(f){const base="https://cdnjs.cloudflare.com/ajax/libs
   await page.render({canvasContext:x,viewport:vp}).promise;return c;}
 $("planFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;planInfo("Lecture du plan…");
   try{const cv=(f.type==="application/pdf"||/\.pdf$/i.test(f.name))?await pdfToCanvas(f):await imgToCanvas(f);
-    CP.img=cv;CP.name=f.name;CP.pts=[null,null,null,null];CP.ok=false;if(planOv){map.removeLayer(planOv);planOv=null;}
+    CP.img=cv;CP.src=cv.toDataURL("image/jpeg",0.9);CP.name=f.name;CP.pts=[null,null,null,null];CP.anchor=null;CP.ok=false;if(planOv){map.removeLayer(planOv);planOv=null;}
     $("btnCalib").disabled=false;$("planOp").disabled=true;planInfo(`« ${f.name} » chargé. Touchez « Caler le plan » pour le positionner.`);openCalib();}
   catch(err){planInfo("Impossible de lire ce fichier : "+err.message);}};
 $("btnCalib").onclick=()=>openCalib();
+/* Image du plan posée sur la carte par transformation affine (déplacement, rotation, échelle) */
+const AffineImage=L.Layer.extend({
+  initialize(getXf,opts){this._getXf=getXf;L.setOptions(this,opts);},
+  onAdd(m){this._m=m;const im=this._img=L.DomUtil.create("img","",m.getPane(this.options.pane||"overlayPane"));im.src=CP.src;
+    Object.assign(im.style,{position:"absolute",left:"0",top:"0",transformOrigin:"0 0",pointerEvents:"none",maxWidth:"none",maxHeight:"none",opacity:this.options.opacity??1});
+    m.on("zoomend viewreset moveend resize",this.update,this);m.on("zoomstart",this._hide,this);this.update();return this;},
+  onRemove(m){this._img.remove();m.off("zoomend viewreset moveend resize",this.update,this);m.off("zoomstart",this._hide,this);},
+  _hide(){if(this._img)this._img.style.visibility="hidden";},
+  setOpacity(o){this.options.opacity=o;if(this._img)this._img.style.opacity=o;},
+  update(){const xf=this._getXf();if(!xf||!this._m||!this._img)return;const W=CP.img.width,H=CP.img.height;
+    const lp=(u,v)=>this._m.latLngToLayerPoint(toLL(xf.ar*u+xf.ai*v+xf.bx,xf.ai*u-xf.ar*v+xf.by));const p0=lp(0,0),pu=lp(W,0),pv=lp(0,H);
+    Object.assign(this._img.style,{width:W+"px",height:H+"px",visibility:"visible",transform:`matrix(${(pu.x-p0.x)/W},${(pu.y-p0.y)/W},${(pv.x-p0.x)/H},${(pv.y-p0.y)/H},${p0.x},${p0.y})`});}
+});
+let calPhase="pts",adjLayer=null,dragOn=false,dragSt=null,wBase=[];
+const BASES={ortho:()=>[ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg")],orthocad:()=>[ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg"),cadastre()],
+  cad:()=>[cadastre()],plan:()=>[ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png")],
+  osm:()=>[L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",{maxNativeZoom:19,maxZoom:22})]};
+function setBase(v){wBase.forEach(l=>wmap.removeLayer(l));wBase=(BASES[v]||BASES.ortho)();wBase.forEach(l=>l.addTo(wmap));}
+$("calBase").onchange=e=>setBase(e.target.value);
 function openCalib(){if(!CP.img)return;$("calib").style.display="flex";
   if(!pmap){pmap=L.map("pmap",{crs:L.CRS.Simple,minZoom:-6,maxZoom:5,zoomSnap:0.25,attributionControl:false});
-    wmap=L.map("wmap",{maxZoom:22,attributionControl:false});ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg").addTo(wmap);
-    pmap.on("click",e=>calibTap("p",e.latlng));wmap.on("click",e=>calibTap("w",e.latlng));}
+    wmap=L.map("wmap",{maxZoom:22,attributionControl:false});wmap.createPane("adj").style.zIndex=450;setBase($("calBase").value);
+    pmap.on("click",e=>calibTap("p",e.latlng));wmap.on("click",e=>calibTap("w",e.latlng));initDrag();}
   if(pImg)pmap.removeLayer(pImg);const W=CP.img.width,Hh=CP.img.height;
-  pImg=L.imageOverlay(CP.img.toDataURL("image/jpeg",0.92),[[0,0],[Hh,W]]).addTo(pmap);
+  pImg=L.imageOverlay(CP.src,[[0,0],[Hh,W]]).addTo(pmap);
+  const fine=!!CP.anchor;
   setTimeout(()=>{pmap.invalidateSize();wmap.invalidateSize();pmap.fitBounds([[0,0],[Hh,W]]);
-    const w=CP.pts[1]||CP.pts[3];wmap.setView(w||(S.lat0!=null?[S.lat0,S.lon0]:map.getCenter()),(w||S.lat0!=null)?20:map.getZoom());renderMarks();},60);}
-const CAL_TXT=["① Touchez un repère net sur votre plan (angle de maison, borne, angle de clôture…)","① Touchez le même repère sur la photo aérienne","② Touchez un second repère sur le plan, le plus loin possible du premier","② Touchez le même repère sur la photo aérienne"];
-function calibTap(kind,ll){const i=CP.pts.findIndex(p=>!p);if(i<0)return;
-  const wantPlan=(i%2===0);if((kind==="p")!==wantPlan){$("calStep").textContent=(wantPlan?"Touchez d'abord le plan (à gauche ou en haut). ":"Touchez maintenant la photo aérienne. ")+CAL_TXT[i];return;}
-  CP.pts[i]=kind==="p"?[ll.lng,CP.img.height-ll.lat]:[ll.lat,ll.lng];renderMarks();}
+    const w=CP.pts[1]||CP.pts[3];wmap.setView(w||(S.lat0!=null?[S.lat0,S.lon0]:map.getCenter()),(w||S.lat0!=null)?20:map.getZoom());
+    if(fine)enterFine();else{calPhase="pts";$("calib").classList.remove("fine");renderMarks();}},60);}
+const CAL_TXT=["① Touchez un repère net sur votre plan (angle de maison, borne, angle de clôture…)","① Touchez le même repère sur le fond de référence","② Touchez un second repère sur le plan, le plus loin possible du premier","② Touchez le même repère sur le fond de référence"];
+function calibTap(kind,ll){if(calPhase!=="pts")return;const i=CP.pts.findIndex(p=>!p);if(i<0)return;
+  const wantPlan=(i%2===0);if((kind==="p")!==wantPlan){$("calStep").textContent=(wantPlan?"Touchez d'abord votre plan. ":"Touchez maintenant le fond de référence. ")+CAL_TXT[i];return;}
+  CP.pts[i]=kind==="p"?[ll.lng,CP.img.height-ll.lat]:[ll.lat,ll.lng];CP.anchor=null;renderMarks();}
 function renderMarks(){cMarks.forEach(m=>m.remove());cMarks=[];
   CP.pts.forEach((p,i)=>{if(!p)return;const n=i<2?1:2,onPlan=i%2===0,ll=onPlan?[CP.img.height-p[1],p[0]]:p;
     const m=L.marker(ll,{draggable:true,icon:L.divIcon({className:"cpin n"+n,html:String(n),iconSize:[26,26]})}).addTo(onPlan?pmap:wmap);
-    m.on("dragend",e=>{const q=e.target.getLatLng();CP.pts[i]=onPlan?[q.lng,CP.img.height-q.lat]:[q.lat,q.lng];updateCalStep();});cMarks.push(m);});
+    m.on("dragend",e=>{const q=e.target.getLatLng();CP.pts[i]=onPlan?[q.lng,CP.img.height-q.lat]:[q.lat,q.lng];CP.anchor=null;updateCalStep();});cMarks.push(m);});
   updateCalStep();}
-function updateCalStep(){const i=CP.pts.findIndex(p=>!p);$("calOk").disabled=i>=0;
+function updateCalStep(){const i=CP.pts.findIndex(p=>!p);$("calOk").disabled=i>=0;$("calFine").disabled=i>=0;
   if(i>=0){$("calStep").textContent=CAL_TXT[i];return;}
   if(S.lat0==null)setOrigin(CP.pts[1][0],CP.pts[1][1]);
-  const xf=planXf();if(!xf){$("calStep").textContent="Les deux repères sont trop proches sur le plan : écartez-les.";$("calOk").disabled=true;return;}
+  const xf=planXf();if(!xf){$("calStep").textContent="Les deux repères sont trop proches sur le plan : écartez-les.";$("calOk").disabled=$("calFine").disabled=true;return;}
   const a=toXY(...CP.pts[1]),b=toXY(...CP.pts[3]),d=Math.hypot(a[0]-b[0],a[1]-b[1]),s=Math.hypot(xf.ar,xf.ai);
-  $("calStep").textContent=`Calage prêt : ${d.toFixed(1)} m entre les repères, 1 m = ${(1/s).toFixed(1)} px du plan. Ajustez en faisant glisser les repères, puis validez.`;}
-$("calReset").onclick=()=>{CP.pts=[null,null,null,null];renderMarks();};
-$("calCancel").onclick=()=>{$("calib").style.display="none";};
-$("calOk").onclick=()=>{if(S.lat0==null){const a=CP.pts[1],b=CP.pts[3];setCenter((a[0]+b[0])/2,(a[1]+b[1])/2,null);}
-  CP.ok=true;$("calib").style.display="none";$("planOp").disabled=false;drawPlanOverlay();
-  const ll=planOv.getBounds();map.fitBounds(ll,{maxZoom:20});
+  $("calStep").textContent=`Premier calage : ${d.toFixed(1)} m entre les repères (1 m = ${(1/s).toFixed(1)} px du plan). Affinez avec « Ajustement fin » ou validez.`;}
+function enterFine(){if(!CP.anchor){const xf=planXf();if(!xf)return;setAnchorFromXf(xf);}
+  calPhase="fine";$("calib").classList.add("fine");cMarks.forEach(m=>m.remove());cMarks=[];$("calFine").textContent="‹ Repères";$("calFine").disabled=false;$("calOk").disabled=false;
+  setTimeout(()=>{wmap.invalidateSize();if(!adjLayer)adjLayer=new AffineImage(planXf,{pane:"adj",opacity:+$("fOp").value}).addTo(wmap);else adjLayer.update();
+    const b=planLLBounds();if(b)wmap.fitBounds(b,{maxZoom:21});fineInfo();},60);
+  $("calStep").textContent="Ajustement fin : faites coïncider le plan (en transparence) avec le fond. Rotation et échelle se font autour de la croix rouge.";}
+function leaveFine(){calPhase="pts";setDrag(false);$("calib").classList.remove("fine");if(adjLayer){wmap.removeLayer(adjLayer);adjLayer=null;}$("calFine").textContent="Ajustement fin ›";
+  setTimeout(()=>{pmap.invalidateSize();wmap.invalidateSize();renderMarks();
+    if(CP.anchor)$("calStep").textContent="Repères : si vous en déplacez un, l'ajustement fin sera recalculé à partir des repères.";},60);}
+$("calFine").onclick=()=>calPhase==="fine"?leaveFine():enterFine();
+$("calReset").onclick=()=>{CP.pts=[null,null,null,null];CP.anchor=null;if(calPhase==="fine")leaveFine();else renderMarks();};
+$("calCancel").onclick=()=>{setDrag(false);$("calib").style.display="none";};
+$("calOk").onclick=()=>{if(!planXf())return;if(S.lat0==null){const b=planLLBounds().getCenter();setCenter(b.lat,b.lng,null);}
+  setDrag(false);CP.ok=true;$("calib").style.display="none";$("planOp").disabled=false;drawPlanOverlay();
+  map.fitBounds(planLLBounds(),{maxZoom:20});
   planInfo(`« ${CP.name} » calé. Vérifiez la superposition sur la carte (curseur de transparence), puis lancez l'analyse.`);
   if(S.res)buildReport();};
-function planXf(){if(!CP.img||CP.pts.some(p=>!p))return null;const [p1,w1,p2,w2]=CP.pts,a1=toXY(w1[0],w1[1]),a2=toXY(w2[0],w2[1]);
+function xfFromPairs(p1,w1,p2,w2){const a1=toXY(w1[0],w1[1]),a2=toXY(w2[0],w2[1]);
   const P1=[p1[0],-p1[1]],P2=[p2[0],-p2[1]],dp=[P2[0]-P1[0],P2[1]-P1[1]],dw=[a2[0]-a1[0],a2[1]-a1[1]],den=dp[0]**2+dp[1]**2;
   if(den<100)return null;const ar=(dw[0]*dp[0]+dw[1]*dp[1])/den,ai=(dw[1]*dp[0]-dw[0]*dp[1])/den;
   return {ar,ai,bx:a1[0]-(ar*P1[0]-ai*P1[1]),by:a1[1]-(ar*P1[1]+ai*P1[0])};}
-function drawPlanOverlay(){if(planOv){map.removeLayer(planOv);planOv=null;}const xf=planXf();if(!xf||!CP.ok)return;
-  const W=CP.img.width,Hh=CP.img.height,cs=[[0,0],[W,0],[W,Hh],[0,Hh]].map(([u,v])=>[xf.ar*u+xf.ai*v+xf.bx,xf.ai*u-xf.ar*v+xf.by]);
-  const x0=Math.min(...cs.map(c=>c[0])),x1=Math.max(...cs.map(c=>c[0])),y0=Math.min(...cs.map(c=>c[1])),y1=Math.max(...cs.map(c=>c[1]));
-  const k=Math.min(1/Math.hypot(xf.ar,xf.ai),2400/Math.max(x1-x0,y1-y0)),c=document.createElement("canvas");c.width=Math.ceil((x1-x0)*k);c.height=Math.ceil((y1-y0)*k);
-  const ctx=c.getContext("2d");ctx.setTransform(k,0,0,-k,-x0*k,y1*k);ctx.transform(xf.ar,xf.ai,xf.ai,-xf.ar,xf.bx,xf.by);ctx.drawImage(CP.img,0,0);
-  planOv=L.imageOverlay(c.toDataURL("image/png"),[toLL(x0,y0),toLL(x1,y1)],{pane:"planov",opacity:+$("planOp").value,interactive:false}).addTo(map);}
+function planXf(){if(!CP.img)return null;const A=CP.anchor||(CP.pts.some(p=>!p)?null:CP.pts);return A?xfFromPairs(...A):null;}
+function setAnchorFromXf(xf){const W=CP.img.width,H=CP.img.height,f=(u,v)=>toLL(xf.ar*u+xf.ai*v+xf.bx,xf.ai*u-xf.ar*v+xf.by);CP.anchor=[[0,0],f(0,0),[W,H],f(W,H)];}
+function planLLBounds(){const xf=planXf();if(!xf)return null;const W=CP.img.width,H=CP.img.height;
+  return L.latLngBounds([[0,0],[W,0],[W,H],[0,H]].map(([u,v])=>toLL(xf.ar*u+xf.ai*v+xf.bx,xf.ai*u-xf.ar*v+xf.by)));}
+function fineApply(fn){const xf=planXf();if(!xf)return;fn(xf);setAnchorFromXf(xf);if(adjLayer)adjLayer.update();fineInfo();}
+function aroundCenter(){const c=wmap.getCenter();return toXY(c.lat,c.lng);}
+document.querySelectorAll("#finePanel [data-mv]").forEach(b=>b.onclick=()=>{const [dx,dy]=b.dataset.mv.split(",").map(Number),s=+$("fStepM").value;fineApply(x=>{x.bx+=dx*s;x.by+=dy*s;});});
+document.querySelectorAll("#finePanel [data-rot]").forEach(b=>b.onclick=()=>{const f=+b.dataset.rot*$("fStepA").value*RAD,c=Math.cos(f),s=Math.sin(f),[cx,cy]=aroundCenter();
+  fineApply(x=>{const ar=x.ar*c-x.ai*s,ai=x.ar*s+x.ai*c,bx=cx+c*(x.bx-cx)-s*(x.by-cy),by=cy+s*(x.bx-cx)+c*(x.by-cy);Object.assign(x,{ar,ai,bx,by});});});
+document.querySelectorAll("#finePanel [data-sc]").forEach(b=>b.onclick=()=>{const k=1+(+b.dataset.sc)*(+$("fStepS").value),[cx,cy]=aroundCenter();
+  fineApply(x=>{x.ar*=k;x.ai*=k;x.bx=cx+k*(x.bx-cx);x.by=cy+k*(x.by-cy);});});
+$("fOp").oninput=e=>{if(adjLayer)adjLayer.setOpacity(+e.target.value);};
+function fineInfo(){const xf=planXf();if(!xf)return;const s=Math.hypot(xf.ar,xf.ai),rot=Math.atan2(xf.ai,xf.ar)/RAD;
+  $("fInfo").textContent=`Échelle : 1 m = ${(1/s).toFixed(2)} px du plan · plan tourné de ${rot.toFixed(1)}° par rapport au nord`;}
+function setDrag(on){dragOn=on;dragSt=null;$("fDrag").classList.toggle("on",on);$("fDrag").textContent=on?"✋ Glisser le plan : actif":"✋ Glisser le plan";
+  if(wmap){on?wmap.dragging.disable():wmap.dragging.enable();}}
+$("fDrag").onclick=()=>setDrag(!dragOn);
+function initDrag(){const wc=$("wmap");
+  wc.addEventListener("pointerdown",e=>{if(!dragOn||calPhase!=="fine")return;if(!e.isPrimary){dragSt=null;return;}
+    dragSt={ll:wmap.mouseEventToLatLng(e),xf:planXf()};try{wc.setPointerCapture(e.pointerId);}catch(_){ }e.preventDefault();e.stopPropagation();},true);
+  wc.addEventListener("pointermove",e=>{if(!dragSt||!e.isPrimary)return;const ll=wmap.mouseEventToLatLng(e),a=toXY(dragSt.ll.lat,dragSt.ll.lng),b=toXY(ll.lat,ll.lng);
+    setAnchorFromXf({...dragSt.xf,bx:dragSt.xf.bx+b[0]-a[0],by:dragSt.xf.by+b[1]-a[1]});if(adjLayer)adjLayer.update();e.preventDefault();},true);
+  const end=()=>{if(dragSt){dragSt=null;fineInfo();}};wc.addEventListener("pointerup",end,true);wc.addEventListener("pointercancel",end,true);}
+function drawPlanOverlay(){if(planOv){map.removeLayer(planOv);planOv=null;}if(!planXf()||!CP.ok)return;
+  planOv=new AffineImage(planXf,{pane:"planov",opacity:+$("planOp").value}).addTo(map);}
 $("planOp").oninput=e=>{if(planOv)planOv.setOpacity(+e.target.value);};
 function planResultCanvas(kind,title){const R=S.res,xf=planXf();const W=CP.img.width,Hh=CP.img.height,k=Math.min(1,2400/Math.max(W,Hh));
   const c=document.createElement("canvas");c.width=Math.round(W*k);c.height=Math.round(Hh*k);const ctx=c.getContext("2d");
@@ -732,6 +802,86 @@ function buildClientPlan(period){const box=$("clientPlan");if(!box)return;box.in
   <p class="note">Plan « ${esc(CP.name)} » calé sur deux repères. Seule la zone d'étude ${S.res.pmask?"(contour du jardin)":""} est colorée ; vérifiez le calage sur la carte avant de vous fier aux limites de zones.</p>`;
   const A=planResultCanvas("class","Zones d'ensoleillement"),B=planResultCanvas("ampm","Soleil du matin / de l'après-midi");
   [[A,"cpA","zones-ensoleillement"],[B,"cpB","soleil-matin-apres-midi"]].forEach(([cv,id,nm])=>{$(id).append(cv);const bt=document.createElement("button");bt.className="sec noprint";bt.style.marginTop="6px";bt.textContent="Télécharger l'image (PNG)";bt.onclick=()=>dlCanvas(cv,`${base}-${nm}.png`);$(id).append(bt);});}
+/* ================= Export PDF (A4) ================= */
+function sunPathCanvas(year,refIso,bg,px){px=px||1040;const k=px/520,c=document.createElement("canvas");c.width=c.height=px;const x=c.getContext("2d");
+  x.fillStyle="#fff";x.fillRect(0,0,px,px);x.scale(k,k);const cx=260,cy=260,Rr=210,P=(alt,az)=>{const r=Rr*(90-alt)/90;return [cx+r*Math.sin(az*RAD),cy-r*Math.cos(az*RAD)];};
+  if(bg){x.save();x.beginPath();x.arc(cx,cy,Rr,0,7);x.clip();x.globalAlpha=.6;x.drawImage(bg,cx-Rr,cy-Rr,2*Rr,2*Rr);x.restore();}
+  const terr=S.horizon&&$("useTerrain").checked;
+  if(terr){x.beginPath();for(let a=0;a<=360;a+=5){const [u,v]=P(Math.max(0,horizonAt(a%360)),a);a?x.lineTo(u,v):x.moveTo(u,v);}for(let a=360;a>=0;a-=5){const [u,v]=P(0,a);x.lineTo(u,v);}
+    x.closePath();x.fillStyle="rgba(138,143,125,.45)";x.fill("evenodd");}
+  x.font="9px Helvetica,Arial";for(const a of [0,15,30,45,60,75]){x.beginPath();x.arc(cx,cy,Rr*(90-a)/90,0,7);x.strokeStyle="#ccd";x.lineWidth=a?0.7:1.5;x.stroke();if(a){x.fillStyle="#889";x.fillText(a+"°",cx+3,cy-Rr*(90-a)/90+11);}}
+  x.strokeStyle="#dde";x.lineWidth=.7;for(let a=0;a<360;a+=30){const [u,v]=P(0,a);x.beginPath();x.moveTo(cx,cy);x.lineTo(u,v);x.stroke();}
+  x.font="bold 15px Helvetica,Arial";x.fillStyle="#334";x.textAlign="center";[["N",0],["E",90],["S",180],["O",270]].forEach(([t,a])=>{const [u,v]=P(-9,a);x.fillText(t,u,v+5);});
+  const D=[[`${year}-06-21`,"#e8833a","21 juin"],[`${year}-03-20`,"#7fae3f","20 mars / 22 sept."],[`${year}-12-21`,"#4c7fd1","21 déc."]];
+  if(refIso&&!D.some(d=>d[0]===refIso))D.push([refIso,"#c0392b",frDate(refIso)]);
+  D.forEach(([iso,col,lab],kk)=>{const t0=dayStart(iso);x.beginPath();let st=false;for(let m=0;m<=1440;m+=4){const p=sunPos(t0+m*6e4,S.lat0,S.lon0);if(p.alt<=0)continue;const [u,v]=P(p.alt,p.az);st?x.lineTo(u,v):x.moveTo(u,v);st=true;}
+    x.strokeStyle=col;x.lineWidth=2.6;x.stroke();x.fillStyle=col;x.font="9.5px Helvetica,Arial";x.textAlign="center";
+    for(let hh=0;hh<24;hh++){const p=sunPos(t0+hh*36e5,S.lat0,S.lon0);if(p.alt<=1)continue;const [u,v]=P(p.alt,p.az);x.beginPath();x.arc(u,v,3,0,7);x.fill();if(kk===0||kk===2)x.fillText(hh+"h",u,v+(kk===0?-6:13));}
+    x.fillRect(8,10+kk*18,14,4);x.fillStyle="#333";x.textAlign="left";x.font="11px Helvetica,Arial";x.fillText(lab,27,16+kk*18);});
+  if(terr){x.fillStyle="rgba(138,143,125,.45)";x.fillRect(8,10+D.length*18-3,14,9);x.fillStyle="#333";x.fillText("masque du relief",27,16+D.length*18);}
+  return c;}
+async function makePdf(){
+  if(!window.jspdf)await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:"mm",format:"a4"}),M=12,PW=210,PH=297,CW=PW-2*M,R=S.res,rep=$("report");let y=M;
+  const T=s=>String(s).replace(/≥/g,">=").replace(/≤/g,"<=").replace(/≈/g,"env.").replace(/[①②✎✋]/g,"").replace(/[’]/g,"'").replace(/[  ]/g," ").replace(/\s+/g," ").trim();
+  const need=hh=>{if(y+hh>PH-M-6){doc.addPage();y=M;}};
+  const H1=t=>{doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(34,54,42);doc.text(T(t),M,y+6);y+=9;};
+  const H2=t=>{need(40);doc.setFont("helvetica","bold");doc.setFontSize(12.5);doc.setTextColor(63,107,74);doc.text(T(t),M,y+5);doc.setDrawColor(210);doc.line(M,y+7,PW-M,y+7);y+=11;};
+  const para=(t,fs,col)=>{fs=fs||9;doc.setFont("helvetica","normal");doc.setFontSize(fs);doc.setTextColor(col??80);const L=doc.splitTextToSize(T(t),CW);const lh=fs*0.42;need(L.length*lh+2);doc.text(L,M,y+fs*0.35);y+=L.length*lh+2;};
+  const img=(cv,w,x)=>{const hh=w*cv.height/cv.width;need(hh+2);doc.addImage(cv.toDataURL("image/jpeg",0.9),"JPEG",x??M+(CW-w)/2,y,w,hh);return hh;};
+  const rgb=c=>{if(c.startsWith("#"))return hex(c);const m=c.match(/\d+/g);return m?m.slice(0,3).map(Number):[128,128,128];};
+  const legend=items=>{doc.setFont("helvetica","normal");doc.setFontSize(8.5);let x=M;need(6);items.forEach(([col,lab])=>{const w=doc.getTextWidth(T(lab))+9;if(x+w>PW-M){x=M;y+=5;need(6);}doc.setFillColor(...rgb(col));doc.rect(x,y,3.5,3.5,"F");doc.setTextColor(40);doc.text(T(lab),x+5,y+3);x+=w+3;});y+=7;};
+  const table=tb=>{if(!tb)return;const rows=[...tb.rows].map(r=>[...r.cells].map(c=>T(c.innerText)));const n=rows[0].length,cw=CW/n;doc.setFontSize(8.2);
+    rows.forEach((r,i)=>{doc.setFont("helvetica",i?"normal":"bold");const ls=r.map(t=>doc.splitTextToSize(t,cw-2));const hh=Math.max(...ls.map(l=>l.length))*3.5+2;need(hh);
+      if(!i){doc.setFillColor(241,244,239);doc.rect(M,y,CW,hh,"F");}doc.setTextColor(30);ls.forEach((l,j)=>doc.text(l,M+j*cw+1,y+3.6));doc.setDrawColor(220);doc.line(M,y+hh,PW-M,y+hh);y+=hh;});y+=3;};
+  // En-tête
+  H1(rep.querySelector("h2").innerText);para(rep.querySelector(".meta").innerText,8.5,110);y+=2;
+  // 1. Course du soleil
+  const secs=[...rep.querySelectorAll("h3")];
+  H2(secs[0].innerText);const year=R.ref.slice(0,4);
+  const bg=planCanvas(840,()=>{},{H:R.H*Math.SQRT2,bare:true});img(sunPathCanvas(year,R.ref,bg),115);
+  y+=115+2;table(rep.querySelector(".plans table"));
+  para("Diagramme vu du ciel : le centre est le zénith, le cercle l'horizon ; chaque point marque une heure pleine (heure légale). En fond, le plan du site orienté au nord, zone d'étude en pointillés rouges. Azimuts comptés depuis le nord (90° = est, 180° = sud, 270° = ouest).",8);
+  // 2. Ombres heure par heure
+  doc.addPage();y=M;H2(secs[1].innerText);
+  const figs=[...rep.querySelectorAll("#snaps figure")],col=4,gw=(CW-3*(col-1))/col;
+  for(let i=0;i<figs.length;i+=col){need(gw+9);figs.slice(i,i+col).forEach((f,j)=>{const cv=f.querySelector("canvas"),x=M+j*(gw+3);doc.addImage(cv.toDataURL("image/jpeg",0.88),"JPEG",x,y,gw,gw);
+      doc.setFont("helvetica","normal");doc.setFontSize(7.3);doc.setTextColor(70);doc.text(doc.splitTextToSize(T(f.querySelector("figcaption").innerText),gw),x+gw/2,y+gw+3,{align:"center"});});y+=gw+9;}
+  legend([["#7f8cad","Ombre portée"],["#c9c5bd","Bâtiment (hauteur en m)"],["#2e7d3b","Couronne d'arbre"],["#b03a2e","Contour du jardin"]].filter(it=>it[1]!=="Contour du jardin"||R.parcelXY));
+  // 3. Zones
+  doc.addPage();y=M;H2(secs[2].innerText);
+  const pw=(CW-4)/2,cA=$("pClass").querySelector("canvas"),cB=$("pHours").querySelector("canvas");need(pw+2);
+  doc.addImage(cA.toDataURL("image/jpeg",0.9),"JPEG",M,y,pw,pw);doc.addImage(cB.toDataURL("image/jpeg",0.9),"JPEG",M+pw+4,y,pw,pw);
+  doc.setFontSize(8);doc.setTextColor(70);doc.text("Zones d'exposition",M+pw/2,y+pw+4,{align:"center"});doc.text("Heures de soleil direct (bleu = 0 h, jaune = maximum)",M+pw*1.5+4,y+pw+4,{align:"center"});y+=pw+8;
+  legend(CL.map(q=>[q.col,`${q.k} (${q.d})`]));
+  table(rep.querySelectorAll("table")[1]);
+  const notes=[...rep.querySelectorAll("p.note")];if(notes[1])para(notes[1].innerText,8);
+  // 4. Matin / après-midi
+  H2(secs[3].innerText);const cC=$("pAmpm").querySelector("canvas");need(110);doc.addImage(cC.toDataURL("image/jpeg",0.9),"JPEG",M,y,105,105);
+  const sx=M+111;doc.setFont("helvetica","normal");doc.setFontSize(8.5);[["rgb(76,155,232)","Soleil surtout le matin"],["rgb(235,230,215)","Matin et après-midi équilibrés"],["rgb(232,131,58)","Soleil surtout l'après-midi"],["#5a5a5a","Moins d'1 h de soleil"]].forEach(([c,l],i)=>{doc.setFillColor(...rgb(c));doc.rect(sx,y+4+i*7,4,4,"F");doc.setTextColor(40);doc.text(l,sx+6,y+7.3+i*7);});
+  const amTxt=doc.splitTextToSize(T($("pAmpm").parentElement.querySelector(".note").innerText.replace(/surtout le matin.*?moins d'1 h de soleil/i,"")),CW-111);doc.setFontSize(8);doc.setTextColor(80);doc.text(amTxt,sx,y+40);y+=110;
+  // 5. Plan client
+  const cp=$("clientPlan");if(cp&&cp.querySelector("canvas")){[...cp.querySelectorAll("canvas")].forEach((cv,i)=>{doc.addPage();y=M;if(i===0)H2(cp.querySelector("h3").innerText);
+      let w=CW,hh=w*cv.height/cv.width;const maxH=PH-y-M-14;if(hh>maxH){w=w*maxH/hh;hh=maxH;}doc.addImage(cv.toDataURL("image/jpeg",0.9),"JPEG",M+(CW-w)/2,y,w,hh);y+=hh+3;});
+    para(cp.querySelector("p.note").innerText,8);}
+  // Hypothèses
+  const hy=secs[secs.length-1];H2(hy.innerText);[...rep.querySelectorAll("ul.note li")].forEach(li=>para("• "+li.innerText,8.3));
+  para(rep.querySelector("p.meta:last-of-type")?rep.querySelectorAll("p.meta")[rep.querySelectorAll("p.meta").length-1].innerText:"",7.5,130);
+  // pieds de page
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(130);
+    doc.text(T(($("proj").value?$("proj").value+" – ":"")+S.addr).slice(0,110),M,PH-6);doc.text(`${i} / ${n}`,PW-M,PH-6,{align:"right"});}
+  const base=T(($("proj").value||S.addr.split(",")[0]||"site")).replace(/[\\/:*?"<>|]+/g,"").slice(0,60);
+  return new File([doc.output("blob")],`Ensoleillement - ${base} - ${R.ref}.pdf`,{type:"application/pdf"});}
+let pdfFile=null;
+function resetPdf(){pdfFile=null;const b=$("btnPdf");b.textContent="Exporter le rapport en PDF";}
+$("btnPdf").onclick=async()=>{const b=$("btnPdf");
+  if(pdfFile){const touch=navigator.maxTouchPoints>0;
+    try{if(touch&&navigator.canShare&&navigator.canShare({files:[pdfFile]})){await navigator.share({files:[pdfFile],title:pdfFile.name});return;}}catch(e){if(e.name==="AbortError")return;}
+    const url=URL.createObjectURL(pdfFile),a=document.createElement("a");a.href=url;a.download=pdfFile.name;document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},5000);return;}
+  b.disabled=true;b.textContent="Préparation du PDF…";
+  try{pdfFile=await makePdf();b.textContent=(navigator.maxTouchPoints>0?"📤 Partager / enregistrer le PDF":"⬇ Télécharger le PDF");log(`PDF prêt : ${pdfFile.name} (${Math.round(pdfFile.size/1024)} ko).`);}
+  catch(e){console.error(e);b.textContent="Exporter le rapport en PDF";log("Échec de l'export PDF : "+e.message);}
+  b.disabled=false;};
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 $("btnPrint").onclick=()=>window.print();
 </script>
